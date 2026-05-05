@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hunting Map Prototype</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-family: sans-serif; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui"><h1>Hunting Ground Alpha</h1><p>Use WASD to scout (Mockup)</p></div>
+    
+    <!-- Load Three.js and Loaders -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+        // 1. Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Lighting (Essential for the smallrocksNormal.png)
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // 3. The Ground (The "Huge Map" base)
+        const groundGeo = new THREE.PlaneGeometry(100, 100);
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x3e5d36 }); // Forest Green
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // 4. Loading your Assets (smallrocks.fbx)
+        const loader = new FBXLoader();
+        loader.load('path/to/smallrocks.fbx', (fbx) => {
+            fbx.scale.set(0.01, 0.01, 0.01); // Adjust based on FBX unit scale factor 1.0
+            
+            // Apply textures (Color and Normal Maps)
+            const textureLoader = new THREE.TextureLoader();
+            const colorMap = textureLoader.load('path/to/smallrocksColor.png');
+            const normalMap = textureLoader.load('path/to/smallrocksNormal.png');
+
+            fbx.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshPhongMaterial({
+                        map: colorMap,
+                        normalMap: normalMap
+                    });
+                }
+            });
+
+            // 5. Procedural Distribution (Scattering the 5 variations)
+            for (let i = 0; i < 50; i++) {
+                const rockInstance = fbx.clone();
+                rockInstance.position.set(
+                    Math.random() * 80 - 40, 
+                    0, 
+                    Math.random() * 80 - 40
+                );
+                rockInstance.rotation.y = Math.random() * Math.PI;
+                scene.add(rockInstance);
+            }
+        });
+
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
