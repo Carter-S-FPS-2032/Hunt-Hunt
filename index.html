@@ -2,22 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World: Optimized Massive Explorer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D World: Self-Coloring Nature</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050508; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        body { margin: 0; overflow: hidden; background-color: #87ceeb; font-family: sans-serif; touch-action: none; }
+        /* Mobile Controls */
+        #controls { position: absolute; bottom: 30px; left: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
+        .row { display: flex; gap: 15px; justify-content: center; }
+        .btn { 
+            width: 70px; height: 70px; 
+            background: rgba(0,0,0,0.5); 
+            border: 2px solid rgba(255,255,255,0.8); 
+            border-radius: 15px; 
+            color: white; 
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: bold; font-size: 20px;
+            user-select: none; -webkit-user-select: none;
+        }
+        .btn:active { background: rgba(255,255,255,0.3); }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <h1 style="margin:0;">Massive World Engine</h1>
-        <p>CLICK TO ENTER | WASD TO WALK</p>
-        <p id="status">Status: Loading Assets...</p>
+    <div id="controls">
+        <div class="row"><div class="btn" id="btn-w">W</div></div>
+        <div class="row">
+            <div class="btn" id="btn-a">A</div>
+            <div class="btn" id="btn-s">S</div>
+            <div class="btn" id="btn-d">D</div>
+        </div>
     </div>
-    <div id="crosshair"></div>
 
     <script type="importmap">
         {
@@ -31,82 +45,73 @@
     <script type="module">
         import * as THREE from 'three';
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // --- WORLD CONSTANTS ---
-        const MAP_SIZE = 1500; 
-        const RENDER_DIST = 1000;
-        const GRASS_COUNT = 12000;
-        const ROCK_COUNT = 2000;
-        const TREE_COUNT = 500;
-
-        // --- SCENE & RENDERER ---
+        // --- WORLD SETTINGS ---
+        const MAP_SIZE = 1500;
         const scene = new THREE.Scene();
-        const skyColor = 0x87ceeb;
-        scene.background = new THREE.Color(skyColor);
-        scene.fog = new THREE.Fog(skyColor, 100, RENDER_DIST);
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 100, 1000);
 
-        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 1, 2500);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- CONTROLS ---
-        const controls = new PointerLockControls(camera, document.body);
-        document.addEventListener('click', () => controls.lock());
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.8));
 
-        let keys = { w: false, a: false, s: false, d: false };
-        document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-        document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
-        // --- TERRAIN GENERATOR ---
-        const getHeight = (x, z) => {
-            // Complex noise simulation for occasional hills
-            return Math.sin(x * 0.015) * Math.cos(z * 0.015) * 20 + 
-                   Math.sin(x * 0.005) * 10;
+        // --- CAMERA TOUCH-DRAG ---
+        let lon = 0, lat = 0;
+        let startX = 0, startY = 0, startLon = 0, startLat = 0;
+        
+        document.addEventListener('pointerdown', (e) => {
+            if (e.target.classList.contains('btn')) return;
+            startX = e.clientX; startY = e.clientY;
+            startLon = lon; startLat = lat;
+            document.addEventListener('pointermove', moveCamera);
+        });
+        const moveCamera = (e) => {
+            lon = (startX - e.clientX) * 0.2 + startLon;
+            lat = (e.clientY - startY) * 0.2 + startLat;
+            lat = Math.max(-85, Math.min(85, lat));
         };
+        document.addEventListener('pointerup', () => document.removeEventListener('pointermove', moveCamera));
 
-        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 128, 128);
-        const posAttr = groundGeo.attributes.position;
-        for (let i = 0; i < posAttr.count; i++) {
-            let x = posAttr.getX(i);
-            let y = posAttr.getY(i);
-            posAttr.setZ(i, getHeight(x, y));
+        // --- TERRAIN ---
+        const getHeight = (x, z) => Math.sin(x * 0.015) * Math.cos(z * 0.015) * 18;
+        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 80, 80);
+        const pos = groundGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            pos.setZ(i, getHeight(pos.getX(i), pos.getY(i)));
         }
         groundGeo.computeVertexNormals();
-        const ground = new THREE.Mesh(groundGeo, new THREE.MeshPhongMaterial({ color: 0x223322 }));
+        const ground = new THREE.Mesh(groundGeo, new THREE.MeshPhongMaterial({ color: 0x1a241a }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
         // --- ASSET SCATTERING ---
         const loader = new FBXLoader();
-        function scatter(name, count, isGrass, isTree = false) {
+        function scatter(name, count, hexColor, scaleBase, selfColor) {
             loader.load(`./assets/${name}.fbx`, (fbx) => {
                 let mesh;
                 fbx.traverse(c => { if(c.isMesh) mesh = c; });
-                if(!mesh) return;
-
-                const mat = new THREE.MeshPhongMaterial({
-                    vertexColors: isGrass, // Fixed: Uses internal FBX colors
-                    color: isGrass ? 0xffffff : (isTree ? 0x1a331a : 0x555555),
-                    shininess: 0
+                
+                // BACK TO SELF-COLORING
+                const mat = new THREE.MeshPhongMaterial({ 
+                    vertexColors: selfColor, // true for Grass
+                    color: selfColor ? 0xffffff : hexColor, // Use white tint if self-coloring
+                    shininess: 2
                 });
 
                 const inst = new THREE.InstancedMesh(mesh.geometry, mat, count);
                 const dummy = new THREE.Object3D();
-
+                
                 for (let i = 0; i < count; i++) {
-                    const x = (Math.random() - 0.5) * MAP_SIZE;
-                    const z = (Math.random() - 0.5) * MAP_SIZE;
+                    const x = (Math.random()-0.5)*MAP_SIZE;
+                    const z = (Math.random()-0.5)*MAP_SIZE;
                     dummy.position.set(x, getHeight(x, z), z);
-                    
                     dummy.rotation.y = Math.random() * Math.PI * 2;
-                    
-                    let s = isGrass ? 0.4 : (isTree ? 5.0 : 0.08); // Rocks are tiny
-                    s *= (0.7 + Math.random() * 0.6);
-                    dummy.scale.set(s, s, s);
-                    
+                    dummy.scale.setScalar(scaleBase * (0.8 + Math.random() * 0.5));
                     dummy.updateMatrix();
                     inst.setMatrixAt(i, dummy.matrix);
                 }
@@ -114,64 +119,53 @@
             });
         }
 
-        // Trigger loaders
-        scatter("Grass", GRASS_COUNT, true);
-        scatter("smallrocks", ROCK_COUNT, false);
-        scatter("Tree", TREE_COUNT, false, true);
+        // TRIGGER SCATTER (Grass = true for self-coloring)
+        scatter("Grass", 8000, 0x355E3B, 0.6, true);   
+        scatter("smallrocks", 1500, 0x666666, 0.1, false); 
+        scatter("Tree", 400, 0x2d4c1e, 4.5, false);       
 
-        // --- LIGHTING ---
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-        sun.position.set(100, 100, 50);
-        scene.add(sun);
+        // --- MOVEMENT ---
+        const keys = { w: false, a: false, s: false, d: false };
+        const setupBtn = (id, key) => {
+            const el = document.getElementById(id);
+            el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[key] = true; });
+            el.addEventListener('pointerup', () => keys[key] = false);
+            el.addEventListener('pointerleave', () => keys[key] = false);
+        };
+        ['w', 'a', 's', 'd'].forEach(k => setupBtn(`btn-${k}`, k));
 
-        // --- ANIMATION LOOP ---
-        const velocity = new THREE.Vector3();
-        const clock = new THREE.Clock();
-        let bobTime = 0;
-
+        let bobTimer = 0;
         function animate() {
             requestAnimationFrame(animate);
-            const dt = clock.getDelta();
+            
+            const phi = THREE.MathUtils.degToRad(90 - lat);
+            const theta = THREE.MathUtils.degToRad(lon);
+            const target = new THREE.Vector3().setFromSphericalCoords(1, phi, theta).add(camera.position);
+            camera.lookAt(target);
 
-            if (controls.isLocked) {
-                // Movement Physics
-                const speed = 120.0;
-                velocity.x -= velocity.x * 10.0 * dt;
-                velocity.z -= velocity.z * 10.0 * dt;
+            const moveForward = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta);
+            const moveRight = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta + Math.PI/2);
+            const isMoving = keys.w || keys.s || keys.a || keys.d;
 
-                const dir = new THREE.Vector3(
-                    Number(keys.d) - Number(keys.a),
-                    0,
-                    Number(keys.s) - Number(keys.w)
-                ).normalize();
+            if (keys.w) camera.position.addScaledVector(moveForward, 2.2);
+            if (keys.s) camera.position.addScaledVector(moveForward, -2.2);
+            if (keys.a) camera.position.addScaledVector(moveRight, -2.2);
+            if (keys.d) camera.position.addScaledVector(moveRight, 2.2);
 
-                if (dir.length() > 0) {
-                    velocity.x += dir.x * speed * dt;
-                    velocity.z += dir.z * speed * dt;
-                    bobTime += dt * 12; // Bob frequency
-                }
-
-                controls.moveRight(velocity.x);
-                controls.moveForward(-velocity.z);
-
-                // Terrain Follow + Head Bob
-                const terrainY = getHeight(camera.position.x, camera.position.z);
-                const bobScale = dir.length() > 0 ? Math.sin(bobTime) * 0.4 : 0;
-                camera.position.y = THREE.MathUtils.lerp(camera.position.y, terrainY + 6 + bobScale, 0.1);
-            }
+            const groundY = getHeight(camera.position.x, camera.position.z);
+            if (isMoving) bobTimer += 0.2;
+            const bob = isMoving ? Math.sin(bobTimer) * 0.45 : 0;
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, groundY + 7 + bob, 0.15);
 
             renderer.render(scene, camera);
         }
+        animate();
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        animate();
-        document.getElementById('status').innerText = "World Generated. Click to Start.";
     </script>
 </body>
 </html>
