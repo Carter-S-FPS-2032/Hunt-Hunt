@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D World: Self-Coloring Nature</title>
+    <title>3D Shader Forest: Flat World</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87ceeb; font-family: sans-serif; touch-action: none; }
-        /* Mobile Controls */
+        body { margin: 0; overflow: hidden; background-color: #050508; font-family: sans-serif; touch-action: none; }
         #controls { position: absolute; bottom: 30px; left: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
         .row { display: flex; gap: 15px; justify-content: center; }
         .btn { 
             width: 70px; height: 70px; 
-            background: rgba(0,0,0,0.5); 
-            border: 2px solid rgba(255,255,255,0.8); 
-            border-radius: 15px; 
+            background: rgba(255,255,255,0.1); 
+            border: 2px solid rgba(255,255,255,0.5); 
+            border-radius: 20px; 
             color: white; 
             display: flex; align-items: center; justify-content: center; 
-            font-weight: bold; font-size: 20px;
+            font-weight: bold; font-size: 22px;
             user-select: none; -webkit-user-select: none;
         }
         .btn:active { background: rgba(255,255,255,0.3); }
@@ -42,28 +41,91 @@
         }
     </script>
 
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        void main() {
+            vUv = uv;
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform float time;
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        void main() {
+            // Create a pulsing grid/wave effect based on position and time
+            float wave = sin(vPosition.x * 0.05 + time) * cos(vPosition.z * 0.05 + time);
+            vec3 colorA = vec3(0.207, 0.368, 0.231); // #355E3B (Hunter Green)
+            vec3 colorB = vec3(0.02, 0.05, 0.02);    // Deep Dark Green
+            vec3 finalColor = mix(colorB, colorA, wave * 0.5 + 0.5);
+            gl_FragColor = vec4(finalColor, 1.0);
+        }
+    </script>
+
     <script type="module">
         import * as THREE from 'three';
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
         // --- WORLD SETTINGS ---
-        const MAP_SIZE = 1500;
+        const MAP_SIZE = 2000;
+        const TREE_COUNT = 2000; 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0x87ceeb, 100, 1000);
+        scene.background = new THREE.Color(0x050508);
+        scene.fog = new THREE.Fog(0x050508, 100, 1000);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2500);
+        camera.position.set(0, 10, 0); // Fixed height for flat world
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.8));
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x111111, 2.0));
 
-        // --- CAMERA TOUCH-DRAG ---
-        let lon = 0, lat = 0;
-        let startX = 0, startY = 0, startLon = 0, startLat = 0;
-        
+        // --- CUSTOM SHADER GROUND ---
+        const shaderUniforms = {
+            time: { value: 1.0 }
+        };
+
+        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
+        const groundMat = new THREE.ShaderMaterial({
+            uniforms: shaderUniforms,
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // --- TREE SCATTER (FLAT) ---
+        const loader = new FBXLoader();
+        loader.load('./assets/Tree.fbx', (fbx) => {
+            let treeMesh;
+            fbx.traverse(c => { if(c.isMesh) treeMesh = c; });
+            
+            const mat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 0 });
+            const inst = new THREE.InstancedMesh(treeMesh.geometry, mat, TREE_COUNT);
+            const dummy = new THREE.Object3D();
+            
+            for (let i = 0; i < TREE_COUNT; i++) {
+                const x = (Math.random()-0.5) * MAP_SIZE;
+                const z = (Math.random()-0.5) * MAP_SIZE;
+                dummy.position.set(x, 0, z); // No height logic
+                dummy.rotation.y = Math.random() * Math.PI * 2;
+                const s = 4 + Math.random() * 5;
+                dummy.scale.set(s, s, s);
+                dummy.updateMatrix();
+                inst.setMatrixAt(i, dummy.matrix);
+            }
+            scene.add(inst);
+        });
+
+        // --- CONTROLS ---
+        let lon = 0, lat = 0, startX = 0, startY = 0, startLon = 0, startLat = 0;
         document.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('btn')) return;
             startX = e.clientX; startY = e.clientY;
@@ -77,54 +139,6 @@
         };
         document.addEventListener('pointerup', () => document.removeEventListener('pointermove', moveCamera));
 
-        // --- TERRAIN ---
-        const getHeight = (x, z) => Math.sin(x * 0.015) * Math.cos(z * 0.015) * 18;
-        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 80, 80);
-        const pos = groundGeo.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-            pos.setZ(i, getHeight(pos.getX(i), pos.getY(i)));
-        }
-        groundGeo.computeVertexNormals();
-        const ground = new THREE.Mesh(groundGeo, new THREE.MeshPhongMaterial({ color: 0x1a241a }));
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
-
-        // --- ASSET SCATTERING ---
-        const loader = new FBXLoader();
-        function scatter(name, count, hexColor, scaleBase, selfColor) {
-            loader.load(`./assets/${name}.fbx`, (fbx) => {
-                let mesh;
-                fbx.traverse(c => { if(c.isMesh) mesh = c; });
-                
-                // BACK TO SELF-COLORING
-                const mat = new THREE.MeshPhongMaterial({ 
-                    vertexColors: selfColor, // true for Grass
-                    color: selfColor ? 0xffffff : hexColor, // Use white tint if self-coloring
-                    shininess: 2
-                });
-
-                const inst = new THREE.InstancedMesh(mesh.geometry, mat, count);
-                const dummy = new THREE.Object3D();
-                
-                for (let i = 0; i < count; i++) {
-                    const x = (Math.random()-0.5)*MAP_SIZE;
-                    const z = (Math.random()-0.5)*MAP_SIZE;
-                    dummy.position.set(x, getHeight(x, z), z);
-                    dummy.rotation.y = Math.random() * Math.PI * 2;
-                    dummy.scale.setScalar(scaleBase * (0.8 + Math.random() * 0.5));
-                    dummy.updateMatrix();
-                    inst.setMatrixAt(i, dummy.matrix);
-                }
-                scene.add(inst);
-            });
-        }
-
-        // TRIGGER SCATTER (Grass = true for self-coloring)
-        scatter("Grass", 8000, 0x355E3B, 0.6, true);   
-        scatter("smallrocks", 1500, 0x666666, 0.1, false); 
-        scatter("Tree", 400, 0x2d4c1e, 4.5, false);       
-
-        // --- MOVEMENT ---
         const keys = { w: false, a: false, s: false, d: false };
         const setupBtn = (id, key) => {
             const el = document.getElementById(id);
@@ -138,6 +152,8 @@
         function animate() {
             requestAnimationFrame(animate);
             
+            shaderUniforms.time.value += 0.01; // Animate the shader
+
             const phi = THREE.MathUtils.degToRad(90 - lat);
             const theta = THREE.MathUtils.degToRad(lon);
             const target = new THREE.Vector3().setFromSphericalCoords(1, phi, theta).add(camera.position);
@@ -147,15 +163,15 @@
             const moveRight = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta + Math.PI/2);
             const isMoving = keys.w || keys.s || keys.a || keys.d;
 
-            if (keys.w) camera.position.addScaledVector(moveForward, 2.2);
-            if (keys.s) camera.position.addScaledVector(moveForward, -2.2);
-            if (keys.a) camera.position.addScaledVector(moveRight, -2.2);
-            if (keys.d) camera.position.addScaledVector(moveRight, 2.2);
+            if (keys.w) camera.position.addScaledVector(moveForward, 3.5);
+            if (keys.s) camera.position.addScaledVector(moveForward, -3.5);
+            if (keys.a) camera.position.addScaledVector(moveRight, -3.5);
+            if (keys.d) camera.position.addScaledVector(moveRight, 3.5);
 
-            const groundY = getHeight(camera.position.x, camera.position.z);
-            if (isMoving) bobTimer += 0.2;
-            const bob = isMoving ? Math.sin(bobTimer) * 0.45 : 0;
-            camera.position.y = THREE.MathUtils.lerp(camera.position.y, groundY + 7 + bob, 0.15);
+            // Walking Bob (On flat ground)
+            if (isMoving) bobTimer += 0.25;
+            const bob = isMoving ? Math.sin(bobTimer) * 0.6 : 0;
+            camera.position.y = 10 + bob;
 
             renderer.render(scene, camera);
         }
