@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World: Massive Forest & Hills</title>
+    <title>3D World: Pro Scatter & Walk</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050508; font-family: sans-serif; }
         #ui { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; text-shadow: 1px 1px 2px black; }
@@ -12,8 +12,8 @@
 <body>
 
     <div id="ui">
-        <h1>Massive Environment</h1>
-        <p>Status: <span id="status">Generating Terrain...</span></p>
+        <h1>Vast Exploration</h1>
+        <p>WASD to Walk | Status: <span id="status">Generating World...</span></p>
     </div>
 
     <script type="importmap">
@@ -28,103 +28,142 @@
     <script type="module">
         import * as THREE from 'three';
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
         // --- CONFIG ---
         const MAP_SIZE = 1000; 
-        const RENDER_DIST = 600;
+        const RENDER_DIST = 800;
         const GRASS_COUNT = 8000;
         const ROCK_COUNT = 1500;
-        const TREE_COUNT = 400;
+        const TREE_COUNT = 300;
 
-        // --- SCENE SETUP ---
+        // --- SCENE & SKY ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a12);
-        
-        // Render Distance / Fog Logic
-        scene.fog = new THREE.Fog(0x0a0a12, 100, RENDER_DIST);
+        scene.background = new THREE.Color(0x87ceeb); // Light sky blue
+        scene.fog = new THREE.Fog(0x87ceeb, 100, RENDER_DIST);
         
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
-        camera.position.set(100, 50, 100);
+        camera.position.set(0, 5, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.maxDistance = RENDER_DIST - 50;
+        // Sky Sphere
+        const skyGeo = new THREE.SphereGeometry(RENDER_DIST, 32, 32);
+        const skyMat = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.BackSide });
+        scene.add(new THREE.Mesh(skyGeo, skyMat));
 
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1.2));
+        // --- CONTROLS & WALKING ---
+        const controls = new PointerLockControls(camera, document.body);
+        document.addEventListener('click', () => controls.lock());
+
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        let bobTimer = 0;
+
+        const onKeyDown = (e) => {
+            if(e.code === 'KeyW') moveForward = true;
+            if(e.code === 'KeyS') moveBackward = true;
+            if(e.code === 'KeyA') moveLeft = true;
+            if(e.code === 'KeyD') moveRight = true;
+        };
+        const onKeyUp = (e) => {
+            if(e.code === 'KeyW') moveForward = false;
+            if(e.code === 'KeyS') moveBackward = false;
+            if(e.code === 'KeyA') moveLeft = false;
+            if(e.code === 'KeyD') moveRight = false;
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- LIGHTING ---
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
 
         // --- HILLY FLOOR ---
-        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 64, 64);
-        const vertices = groundGeo.attributes.position.array;
-        
-        // Simple procedural hills
-        for (let i = 0; i < vertices.length; i += 3) {
-            const x = vertices[i];
-            const y = vertices[i + 1];
-            vertices[i + 2] = Math.sin(x * 0.02) * Math.cos(y * 0.02) * 15; // Elevation
+        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 100, 100);
+        const posAttr = groundGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            const x = posAttr.getX(i);
+            const y = posAttr.getY(i);
+            posAttr.setZ(i, Math.sin(x * 0.02) * Math.cos(y * 0.02) * 15);
         }
         groundGeo.computeVertexNormals();
-        const groundMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
+        const ground = new THREE.Mesh(groundGeo, new THREE.MeshPhongMaterial({ color: 0x1a2b1a }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // Helper to get hill height at any X, Z coordinate
-        function getHeight(x, z) {
-            return Math.sin(x * 0.02) * Math.cos(z * 0.02) * 15;
-        }
+        const getHeight = (x, z) => Math.sin(x * 0.02) * Math.cos(z * 0.02) * 15;
 
-        // --- SCATTER SYSTEM ---
+        // --- ASSET LOADER ---
         const loader = new FBXLoader();
-
         function scatter(name, count, isGrass, isTree = false) {
             loader.load(`./assets/${name}.fbx`, (fbx) => {
-                let sourceMesh;
-                fbx.traverse(child => { if (child.isMesh) sourceMesh = child; });
-                if (!sourceMesh) return;
+                let mesh;
+                fbx.traverse(c => { if(c.isMesh) mesh = c; });
+                if(!mesh) return;
 
-                const material = new THREE.MeshPhongMaterial({
-                    vertexColors: isGrass, // Grass colors itself
-                    color: isGrass ? 0xffffff : (isTree ? 0x2d4c1e : 0x333333)
+                const mat = new THREE.MeshPhongMaterial({
+                    vertexColors: isGrass,
+                    color: isGrass ? 0xffffff : (isTree ? 0x2d4c1e : 0x444444)
                 });
 
-                const instancedMesh = new THREE.InstancedMesh(sourceMesh.geometry, material, count);
-                const matrix = new THREE.Matrix4();
-                const pos = new THREE.Vector3();
-                const rot = new THREE.Euler();
-                const scl = new THREE.Vector3();
+                const inst = new THREE.InstancedMesh(mesh.geometry, mat, count);
+                const dummy = new THREE.Object3D();
 
                 for (let i = 0; i < count; i++) {
-                    pos.x = (Math.random() - 0.5) * MAP_SIZE;
-                    pos.z = (Math.random() - 0.5) * MAP_SIZE;
-                    pos.y = getHeight(pos.x, pos.z); // Snaps to hills
-
-                    rot.y = Math.random() * Math.PI * 2;
-                    
-                    let s = 1.0;
-                    if (isGrass) s = 0.4 + Math.random() * 0.6;
-                    else if (isTree) s = 2.0 + Math.random() * 3.0; // Big trees
-                    else s = 0.05 + Math.random() * 0.15; // Tiny rocks
-                    
-                    scl.set(s, s, s);
-                    matrix.compose(pos, new THREE.Quaternion().setFromEuler(rot), scl);
-                    instancedMesh.setMatrixAt(i, matrix);
+                    dummy.position.set((Math.random()-0.5)*MAP_SIZE, 0, (Math.random()-0.5)*MAP_SIZE);
+                    dummy.position.y = getHeight(dummy.position.x, dummy.position.z);
+                    dummy.rotation.y = Math.random() * Math.PI * 2;
+                    let s = isGrass ? 0.5 : (isTree ? 4 : 0.1);
+                    s *= (0.8 + Math.random() * 0.4);
+                    dummy.scale.set(s, s, s);
+                    dummy.updateMatrix();
+                    inst.setMatrixAt(i, dummy.matrix);
                 }
-                scene.add(instancedMesh);
+                scene.add(inst);
             });
         }
 
-        // Initialize assets
         scatter("Grass", GRASS_COUNT, true);
         scatter("smallrocks", ROCK_COUNT, false);
-        scatter("Tree", TREE_COUNT, false, true); // Assuming Tree.fbx exists
+        scatter("Tree", TREE_COUNT, false, true);
 
+        // --- LOOP ---
+        const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            controls.update();
+            const delta = clock.getDelta();
+
+            if (controls.isLocked) {
+                // Movement
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                // Terrain Following & Bobbing
+                const playerX = camera.position.x;
+                const playerZ = camera.position.z;
+                const groundY = getHeight(playerX, playerZ);
+                
+                // Bobbing Logic
+                let bobOffset = 0;
+                if (moveForward || moveBackward || moveLeft || moveRight) {
+                    bobTimer += delta * 10;
+                    bobOffset = Math.sin(bobTimer) * 0.3; // Height of bob
+                }
+                camera.position.y = groundY + 5 + bobOffset;
+            }
             renderer.render(scene, camera);
         }
 
@@ -135,7 +174,7 @@
         });
 
         animate();
-        document.getElementById('status').innerText = "Vast World Loaded";
+        document.getElementById('status').innerText = "Ready. Click to Start.";
     </script>
 </body>
 </html>
