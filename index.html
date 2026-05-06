@@ -14,7 +14,7 @@
             overflow: hidden; 
             background: #87ceeb; 
             font-family: 'Segoe UI', sans-serif; 
-            touch-action: none; /* Prevents pull-to-refresh and scrolling */
+            touch-action: none; 
         }
         
         #hud {
@@ -45,12 +45,9 @@
             font-weight: 800;
             font-size: 1.2rem;
             user-select: none;
-            -webkit-user-select: none;
         }
 
-        .control-node:active {
-            background: rgba(255, 255, 255, 0.3);
-        }
+        .control-node:active { background: rgba(255, 255, 255, 0.3); }
 
         #w { grid-area: up; }
         #a { grid-area: left; }
@@ -80,12 +77,11 @@
         import * as THREE from 'three';
         import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
-        // --- SCENE & RENDERER ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xa3b1c6);
-        scene.fog = new THREE.FogExp2(0xa3b1c6, 0.0012);
+        scene.fog = new THREE.FogExp2(0xa3b1c6, 0.0015);
 
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 10000);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
         camera.position.set(0, 18, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -94,63 +90,56 @@
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTS ---
-        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-        sun.position.set(50, 100, 50);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+        sun.position.set(100, 200, 100);
         scene.add(sun);
 
-        // --- WORLD OBJECTS ---
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(15000, 15000),
-            new THREE.MeshStandardMaterial({ color: 0x241d14, roughness: 0.9 })
+            new THREE.MeshStandardMaterial({ color: 0x1a2b1a, roughness: 1 })
         );
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        function createStylizedTree() {
-            const geoms = [];
-            
-            const trunk = new THREE.CylinderGeometry(3, 5, 60, 6);
-            trunk.translate(0, 30, 0);
-            geoms.push(trunk);
+        // --- TREE GENERATION ---
+        const count = 3500;
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4d2926, flatShading: true });
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x2d4c2d, flatShading: true });
 
-            const layers = [
-                { r: 45, h: 60, y: 55 },
-                { r: 35, h: 50, y: 95 },
-                { r: 25, h: 40, y: 130 },
-                { r: 15, h: 30, y: 155 }
-            ];
+        // Trunk Geometry
+        const trunkGeom = new THREE.CylinderGeometry(3, 5, 60, 6);
+        trunkGeom.translate(0, 30, 0);
+        const trunkMesh = new THREE.InstancedMesh(trunkGeom, trunkMat, count);
 
-            layers.forEach(l => {
-                const cone = new THREE.ConeGeometry(l.r, l.h, 6);
-                cone.translate(0, l.y, 0);
-                geoms.push(cone);
-            });
+        // Foliage Geometry
+        const leafGeoms = [];
+        const layers = [{ r: 45, h: 60, y: 55 }, { r: 35, h: 50, y: 95 }, { r: 25, h: 40, y: 130 }, { r: 15, h: 30, y: 155 }];
+        layers.forEach(l => {
+            const cone = new THREE.ConeGeometry(l.r, l.h, 6);
+            cone.translate(0, l.y, 0);
+            leafGeoms.push(cone);
+        });
+        const combinedLeafGeom = BufferGeometryUtils.mergeGeometries(leafGeoms);
+        const leafMesh = new THREE.InstancedMesh(combinedLeafGeom, leafMat, count);
 
-            return BufferGeometryUtils.mergeGeometries(geoms);
-        }
-
-        const count = 4000; // Slightly reduced for better performance on mobile
-        const treeMat = new THREE.MeshStandardMaterial({ color: 0x2d4c2d, flatShading: true });
-        const trees = new THREE.InstancedMesh(createStylizedTree(), treeMat, count);
-        
         const dummy = new THREE.Object3D();
         for (let i = 0; i < count; i++) {
-            dummy.position.set((Math.random() - 0.5) * 10000, 0, (Math.random() - 0.5) * 10000);
+            dummy.position.set((Math.random() - 0.5) * 12000, 0, (Math.random() - 0.5) * 12000);
             dummy.rotation.y = Math.random() * Math.PI;
-            const s = 0.5 + Math.random() * 1.2;
+            const s = 0.4 + Math.random() * 1.2;
             dummy.scale.set(s, s, s);
             dummy.updateMatrix();
-            trees.setMatrixAt(i, dummy.matrix);
+            
+            trunkMesh.setMatrixAt(i, dummy.matrix);
+            leafMesh.setMatrixAt(i, dummy.matrix);
         }
-        scene.add(trees);
+        scene.add(trunkMesh, leafMesh);
 
         // --- CONTROLS ---
         let yaw = 0, pitch = 0;
         const keys = { w: false, a: false, s: false, d: false };
 
-        // HUD Controls
         const bind = (id, k) => {
             const el = document.getElementById(id);
             el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
@@ -159,33 +148,23 @@
         };
         ['w', 'a', 's', 'd'].forEach(k => bind(k, k));
 
-        // Keyboard Controls
         window.addEventListener('keydown', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
 
-        // Camera Look (Mouse & Touch)
         let lastX = 0, lastY = 0;
-        document.addEventListener('pointerdown', (e) => {
-            lastX = e.clientX;
-            lastY = e.clientY;
-        });
-
+        document.addEventListener('pointerdown', (e) => { lastX = e.clientX; lastY = e.clientY; });
         document.addEventListener('pointermove', (e) => {
             if (e.buttons > 0 || e.pointerType === 'touch') {
                 const dx = e.clientX - lastX;
                 const dy = e.clientY - lastY;
-                
                 yaw -= (e.movementX || dx) * 0.003;
-                pitch -= (e.movementY || dy) * 0.003;
-                pitch = Math.max(-1.4, Math.min(1.4, pitch));
-                
-                lastX = e.clientX;
-                lastY = e.clientY;
+                pitch = Math.max(-1.4, Math.min(1.4, pitch - (e.movementY || dy) * 0.003));
+                lastX = e.clientX; lastY = e.clientY;
             }
         });
 
-        // --- LOOP ---
-        let bob = 0;
+        // --- ANIMATION LOOP ---
+        let bobTimer = 0;
         function animate() {
             requestAnimationFrame(animate);
             camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
@@ -198,10 +177,17 @@
 
             if (move.lengthSq() > 0) {
                 move.normalize().applyQuaternion(camera.quaternion);
-                move.y = 0; // Keep movement on the ground
-                camera.position.addScaledVector(move, 2.5);
-                bob += 0.15;
-                camera.position.y = 18 + Math.sin(bob) * 0.5;
+                move.y = 0;
+                camera.position.addScaledVector(move, 3.2); // Faster movement
+                
+                // --- INTENSE BOBBING ---
+                bobTimer += 0.22; // Speed of the step
+                // Sin wave for height, Abs(Cos) for a slight side-to-side shuffle
+                camera.position.y = 18 + Math.sin(bobTimer) * 1.2; 
+                camera.rotation.z = Math.cos(bobTimer * 0.5) * 0.02;
+            } else {
+                // Smoothly return to standing height when stopping
+                camera.position.y = THREE.MathUtils.lerp(camera.position.y, 18, 0.1);
             }
 
             renderer.render(scene, camera);
