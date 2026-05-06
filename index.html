@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D World: Low-Poly Pine Forest</title>
+    <title>3D World: Giant Pine Forest</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #a3b1c6; font-family: sans-serif; touch-action: none; }
         #controls { position: absolute; bottom: 30px; left: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
@@ -44,37 +44,36 @@
 
         // --- SCENE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xa3b1c6); // Match the light blue/grey sky in your image
-        scene.fog = new THREE.Fog(0xa3b1c6, 50, 1000);
+        scene.background = new THREE.Color(0xa3b1c6); 
+        scene.fog = new THREE.Fog(0xa3b1c6, 100, 1500);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
-        camera.position.set(0, 15, 40);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 3000);
+        camera.position.set(0, 15, 0); // Eye level
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTING (High Contrast for Low Poly) ---
+        // --- LIGHTING ---
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
         scene.add(hemiLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        dirLight.position.set(10, 20, 10);
+        dirLight.position.set(50, 100, 50);
         scene.add(dirLight);
 
-        // --- FLAT GROUND ---
-        const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-        const groundMat = new THREE.MeshPhongMaterial({ color: 0x1a1a1a });
+        // --- GROUND (#89683C) ---
+        const groundGeo = new THREE.PlaneGeometry(4000, 4000);
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x89683C });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // --- EXACT TREE GENERATOR ---
-        function createPineTree() {
+        // --- GIANT LAYERED TREE GENERATOR ---
+        function createGiantPine() {
             const treeGroup = new THREE.Group();
             
-            // Material: Flat Shading is key for the faceted look
             const leafMat = new THREE.MeshPhongMaterial({ 
                 color: 0x355E3B, 
                 flatShading: true,
@@ -86,22 +85,22 @@
                 flatShading: true 
             });
 
-            // Trunk (The small brown block at the bottom)
-            const trunkGeo = new THREE.CylinderGeometry(0.8, 0.8, 3, 8);
+            // Giant Trunk
+            const trunkGeo = new THREE.CylinderGeometry(4, 5, 25, 12);
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.y = 1.5;
+            trunk.position.y = 12.5;
             treeGroup.add(trunk);
 
-            // Leaf Layers (4 Cones, low radial segments for sharp edges)
+            // Giant Leaf Layers (Matching IMG_0019.jpeg proportions but scaled up)
             const layers = [
-                { rad: 6.5, height: 8, y: 7 },    // Bottom
-                { rad: 5.0, height: 7, y: 12 },   // Mid-low
-                { rad: 3.5, height: 6, y: 17 },   // Mid-high
-                { rad: 2.0, height: 5, y: 21 }    // Top
+                { rad: 35, height: 45, y: 50 },    // Bottom
+                { rad: 28, height: 40, y: 85 },    // Mid-low
+                { rad: 20, height: 35, y: 115 },   // Mid-high
+                { rad: 12, height: 30, y: 140 }    // Top
             ];
 
             layers.forEach(layer => {
-                const geo = new THREE.ConeGeometry(layer.rad, layer.height, 12); // 12 segments for "faceted" look
+                const geo = new THREE.ConeGeometry(layer.rad, layer.height, 12); 
                 const mesh = new THREE.Mesh(geo, leafMat);
                 mesh.position.y = layer.y;
                 treeGroup.add(mesh);
@@ -110,19 +109,22 @@
             return treeGroup;
         }
 
-        // Scatter Trees
-        const treeTemplate = createPineTree();
-        for (let i = 0; i < 400; i++) {
+        // Scatter Giant Trees
+        const treeTemplate = createGiantPine();
+        const TREE_COUNT = 150; // Fewer trees because they are massive
+        for (let i = 0; i < TREE_COUNT; i++) {
             const tree = treeTemplate.clone();
-            const x = (Math.random() - 0.5) * 1200;
-            const z = (Math.random() - 0.5) * 1200;
+            const x = (Math.random() - 0.5) * 3000;
+            const z = (Math.random() - 0.5) * 3000;
             tree.position.set(x, 0, z);
-            tree.scale.setScalar(0.7 + Math.random() * 0.6);
+            // Additional random scale for variety
+            const s = 0.8 + Math.random() * 0.4;
+            tree.scale.set(s, s, s);
             tree.rotation.y = Math.random() * Math.PI;
             scene.add(tree);
         }
 
-        // --- CONTROLS & CAMERA ---
+        // --- CONTROLS ---
         let lon = 0, lat = 0, startX = 0, startY = 0, startLon = 0, startLat = 0;
         document.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('btn')) return;
@@ -146,7 +148,7 @@
         };
         ['w','a','s','d'].forEach(k => setup(`btn-${k}`, k));
 
-        // --- ANIMATION ---
+        // --- ANIMATION LOOP ---
         let bob = 0;
         function animate() {
             requestAnimationFrame(animate);
@@ -160,13 +162,16 @@
             const right = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta + Math.PI/2);
             const isMoving = keys.w || keys.s || keys.a || keys.d;
 
-            if (keys.w) camera.position.addScaledVector(forward, 3);
-            if (keys.s) camera.position.addScaledVector(forward, -3);
-            if (keys.a) camera.position.addScaledVector(right, -3);
-            if (keys.d) camera.position.addScaledVector(right, 3);
+            // SLOWER WALK SPEED (Reduced from 3 to 1.2)
+            const speed = 1.2;
+            if (keys.w) camera.position.addScaledVector(forward, speed);
+            if (keys.s) camera.position.addScaledVector(forward, -speed);
+            if (keys.a) camera.position.addScaledVector(right, -speed);
+            if (keys.d) camera.position.addScaledVector(right, speed);
 
-            if (isMoving) bob += 0.2;
-            camera.position.y = 15 + (isMoving ? Math.sin(bob) * 0.5 : 0);
+            // Subtle bobbing for the slower pace
+            if (isMoving) bob += 0.1;
+            camera.position.y = 15 + (isMoving ? Math.sin(bob) * 0.3 : 0);
 
             renderer.render(scene, camera);
         }
