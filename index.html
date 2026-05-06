@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,9 +9,14 @@
             --glass: rgba(255, 255, 255, 0.1);
             --border: rgba(255, 255, 255, 0.2);
         }
-        body { margin: 0; overflow: hidden; background: #87ceeb; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #87ceeb; 
+            font-family: 'Segoe UI', sans-serif; 
+            touch-action: none; /* Prevents pull-to-refresh and scrolling */
+        }
         
-        /* New HUD Style */
         #hud {
             position: absolute;
             bottom: 40px;
@@ -27,8 +32,8 @@
 
         .control-node {
             pointer-events: auto;
-            width: 75px;
-            height: 75px;
+            width: 70px;
+            height: 70px;
             background: var(--glass);
             backdrop-filter: blur(10px);
             border: 1px solid var(--border);
@@ -38,15 +43,12 @@
             justify-content: center;
             color: white;
             font-weight: 800;
-            font-size: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: transform 0.1s, background 0.1s;
+            font-size: 1.2rem;
             user-select: none;
             -webkit-user-select: none;
         }
 
         .control-node:active {
-            transform: scale(0.9);
             background: rgba(255, 255, 255, 0.3);
         }
 
@@ -76,7 +78,7 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { BufferGeometryUtils } from 'three/addons/utils/BufferGeometryUtils.js';
+        import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
         // --- SCENE & RENDERER ---
         const scene = new THREE.Scene();
@@ -88,7 +90,7 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
 
@@ -109,12 +111,10 @@
         function createStylizedTree() {
             const geoms = [];
             
-            // Trunk: Stops at the bottom of the foliage
             const trunk = new THREE.CylinderGeometry(3, 5, 60, 6);
             trunk.translate(0, 30, 0);
             geoms.push(trunk);
 
-            // Foliage: 4 layers
             const layers = [
                 { r: 45, h: 60, y: 55 },
                 { r: 35, h: 50, y: 95 },
@@ -131,15 +131,15 @@
             return BufferGeometryUtils.mergeGeometries(geoms);
         }
 
-        const count = 6000;
+        const count = 4000; // Slightly reduced for better performance on mobile
         const treeMat = new THREE.MeshStandardMaterial({ color: 0x2d4c2d, flatShading: true });
         const trees = new THREE.InstancedMesh(createStylizedTree(), treeMat, count);
         
         const dummy = new THREE.Object3D();
         for (let i = 0; i < count; i++) {
-            dummy.position.set((Math.random() - 0.5) * 12000, 0, (Math.random() - 0.5) * 12000);
+            dummy.position.set((Math.random() - 0.5) * 10000, 0, (Math.random() - 0.5) * 10000);
             dummy.rotation.y = Math.random() * Math.PI;
-            const s = 0.5 + Math.random() * 1.5;
+            const s = 0.5 + Math.random() * 1.2;
             dummy.scale.set(s, s, s);
             dummy.updateMatrix();
             trees.setMatrixAt(i, dummy.matrix);
@@ -150,6 +150,7 @@
         let yaw = 0, pitch = 0;
         const keys = { w: false, a: false, s: false, d: false };
 
+        // HUD Controls
         const bind = (id, k) => {
             const el = document.getElementById(id);
             el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
@@ -158,10 +159,28 @@
         };
         ['w', 'a', 's', 'd'].forEach(k => bind(k, k));
 
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+        // Camera Look (Mouse & Touch)
+        let lastX = 0, lastY = 0;
+        document.addEventListener('pointerdown', (e) => {
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
         document.addEventListener('pointermove', (e) => {
             if (e.buttons > 0 || e.pointerType === 'touch') {
-                yaw -= e.movementX * 0.003;
-                pitch = Math.max(-1.4, Math.min(1.4, pitch - e.movementY * 0.003));
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+                
+                yaw -= (e.movementX || dx) * 0.003;
+                pitch -= (e.movementY || dy) * 0.003;
+                pitch = Math.max(-1.4, Math.min(1.4, pitch));
+                
+                lastX = e.clientX;
+                lastY = e.clientY;
             }
         });
 
@@ -179,10 +198,10 @@
 
             if (move.lengthSq() > 0) {
                 move.normalize().applyQuaternion(camera.quaternion);
-                move.y = 0;
-                camera.position.addScaledVector(move, 1.8);
+                move.y = 0; // Keep movement on the ground
+                camera.position.addScaledVector(move, 2.5);
                 bob += 0.15;
-                camera.position.y = 18 + Math.sin(bob) * 0.4;
+                camera.position.y = 18 + Math.sin(bob) * 0.5;
             }
 
             renderer.render(scene, camera);
