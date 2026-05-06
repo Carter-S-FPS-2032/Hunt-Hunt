@@ -3,138 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Forest Hunter: Wildlife & Packs</title>
+    <title>Forest Hunter: Wildlife Overhaul</title>
     <style>
-        :root { --gold: #ffcc00; --ui-bg: rgba(10, 15, 20, 0.9); }
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action: none; color: #eee; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; pointer-events: none; z-index: 100; border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; }
-        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
-        #stats-panel { position: absolute; top: 20px; left: 20px; background: var(--ui-bg); padding: 15px; border-radius: 10px; border-left: 5px solid var(--gold); }
-        #minimap-wrap { position: absolute; top: 20px; right: 20px; width: 160px; height: 160px; background: var(--ui-bg); border: 2px solid #444; border-radius: 50%; overflow: hidden; }
-        #map-player { position: absolute; width: 8px; height: 8px; background: #00ff44; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; }
-        #map-shop { position: absolute; width: 12px; height: 12px; background: var(--gold); transform: rotate(45deg); }
-        #backpack-gui { position: absolute; bottom: 120px; right: 20px; width: 220px; background: var(--ui-bg); border: 1px solid #555; padding: 15px; border-radius: 8px; display: none; }
-        #mobile-hud { position: absolute; bottom: 30px; left: 30px; display: grid; grid-template-areas: ". u ." "l d r"; gap: 12px; }
-        .m-btn { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        :root { --gold: #ffaa00; --ui-bg: rgba(5, 10, 15, 0.95); }
+        body { margin: 0; overflow: hidden; background: #010204; font-family: 'Courier New', monospace; color: #fff; }
+        
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; pointer-events: none; z-index: 100; }
+        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 2px; background: #ff0000; transform: translate(-50%, -50%); }
+
+        #stats { position: absolute; top: 20px; left: 20px; background: var(--ui-bg); padding: 15px; border-radius: 5px; border-left: 4px solid var(--gold); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        #minimap { position: absolute; top: 20px; right: 20px; width: 150px; height: 150px; background: var(--ui-bg); border: 2px solid #333; border-radius: 50%; overflow: hidden; }
+        #map-p { position: absolute; width: 6px; height: 6px; background: #0f0; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #map-s { position: absolute; width: 10px; height: 10px; background: var(--gold); border-radius: 2px; }
+
+        #backpack-ui { position: absolute; bottom: 120px; right: 20px; background: var(--ui-bg); border: 1px solid #444; padding: 15px; width: 200px; display: none; }
+        #hud-mobile { position: absolute; bottom: 30px; left: 30px; display: grid; grid-template-areas: ". u ." "l d r"; gap: 10px; }
+        .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.05); border: 1px solid #444; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
-    <div id="stats-panel">
-        <div style="color: var(--gold)">CREDITS: $<span id="val-money">0</span></div>
-        <div>BACKPACK: <span id="val-weight">0</span> / 50kg</div>
+    <div id="stats">
+        <div style="color:var(--gold); font-weight:bold;">$ <span id="money">0</span></div>
+        <div style="font-size:12px;">CARGO: <span id="weight">0</span>/50kg</div>
     </div>
-    <div id="minimap-wrap"><div id="map-shop"></div><div id="map-player"></div></div>
-    <div id="backpack-gui"><h3 style="margin: 0; font-size: 14px;">INVENTORY (B)</h3><hr><ul id="item-list" style="font-size: 12px; padding-left: 15px;"></ul></div>
-    <div id="mobile-hud">
-        <div class="m-btn" style="grid-area: u" id="btn-w">W</div>
-        <div class="m-btn" style="grid-area: l" id="btn-a">A</div>
-        <div class="m-btn" style="grid-area: d" id="btn-s">S</div>
-        <div class="m-btn" style="grid-area: r" id="btn-d">D</div>
+    
+    <div id="minimap"><div id="map-s"></div><div id="map-p"></div></div>
+
+    <div id="backpack-ui"><strong>INVENTORY</strong><hr><div id="inv-list" style="font-size:11px;">Empty</div></div>
+
+    <div id="hud-mobile">
+        <div class="btn" style="grid-area: u" id="w">W</div>
+        <div class="btn" style="grid-area: l" id="a">A</div>
+        <div class="btn" style="grid-area: d" id="s">S</div>
+        <div class="btn" style="grid-area: r" id="d">D</div>
     </div>
 
     <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }</script>
+
     <script type="module">
         import * as THREE from 'three';
 
+        // --- CORE ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020406);
-        scene.fog = new THREE.FogExp2(0x020406, 0.0015);
+        scene.background = new THREE.Color(0x010204);
+        scene.fog = new THREE.FogExp2(0x010204, 0.0018);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 15000);
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 15000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        const light = new THREE.DirectionalLight(0x445566, 1.5);
-        light.position.set(10, 20, 10);
-        scene.add(light, new THREE.AmbientLight(0xffffff, 0.2));
+        // --- ENHANCED LIGHTING ---
+        const ambient = new THREE.HemisphereLight(0x0a1020, 0x050505, 0.5);
+        scene.add(ambient);
+        const moon = new THREE.DirectionalLight(0x556677, 1.2);
+        moon.position.set(50, 100, 50);
+        scene.add(moon);
 
-        // --- GAME STATE ---
-        const SHOP_POS = { x: 500, z: 500 };
-        let money = 0, currentWeight = 0;
-        const animals = [];
+        // --- WORLD ASSETS ---
+        const SHOP_POS = { x: 400, z: 400 };
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), new THREE.MeshStandardMaterial({color: 0x080907}));
+        floor.rotation.x = -Math.PI/2;
+        scene.add(floor);
 
-        // --- ASSETS: SHOP (Based on IMG_0022.jpeg) ---
-        function createShop() {
-            const g = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(40, 25, 60), new THREE.MeshStandardMaterial({color: 0x3d2b1f}));
-            body.position.y = 15;
-            const roof = new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 65, 3, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({color: 0x221a15}));
+        function createWagonShop() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(35, 25, 50), new THREE.MeshStandardMaterial({color: 0x2a1a10}));
+            body.position.y = 17;
+            const roof = new THREE.Mesh(new THREE.CylinderGeometry(25, 25, 55, 3, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({color: 0x1a110a}));
             roof.rotation.set(0, Math.PI/2, Math.PI/2); roof.position.y = 35;
-            const wheels = new THREE.CylinderGeometry(10, 10, 4, 8); wheels.rotateZ(Math.PI/2);
-            for(let i=0; i<4; i++) {
-                const w = new THREE.Mesh(wheels, new THREE.MeshStandardMaterial({color: 0x111}));
-                w.position.set(i<2?-22:22, 10, i%2===0?-20:20); g.add(w);
-            }
-            const glow = new THREE.PointLight(0xff6600, 1000, 100); glow.position.set(25, 20, 0);
-            g.add(body, roof, glow); return g;
+            const lamp = new THREE.PointLight(0xff6600, 1500, 80); lamp.position.set(22, 20, 0);
+            group.add(body, roof, lamp);
+            return group;
         }
-        const shop = createShop(); shop.position.set(SHOP_POS.x, 0, SHOP_POS.z); scene.add(shop);
+        const store = createWagonShop(); store.position.set(SHOP_POS.x, 0, SHOP_POS.z); scene.add(store);
 
-        // --- WILDLIFE LOGIC ---
+        // --- PROCEDURAL ANIMALS ---
+        const animals = [];
         const species = {
-            wolf: { color: 0x444444, weight: 8, scale: 2, isPack: true },
-            elk: { color: 0x7a5a3a, weight: 12, scale: 4, isPack: false },
-            moose: { color: 0x3d2b1f, weight: 20, scale: 5, isPack: false },
-            deer: { color: 0xa67c52, weight: 6, scale: 3, isPack: false },
-            fox: { color: 0xd35400, weight: 2, scale: 1.2, isPack: false }
+            moose: { color: 0x3d2b1f, h: 12, w: 15, weight: 20 },
+            wolf: { color: 0x444444, h: 5, w: 8, weight: 10 },
+            fox: { color: 0xd35400, h: 3, w: 5, weight: 4 },
+            deer: { color: 0x966f47, h: 8, w: 10, weight: 12 }
         };
 
-        function spawnAnimal(type, x, z, packLeader = null) {
-            const data = species[type];
-            const geo = new THREE.BoxGeometry(data.scale, data.scale, data.scale * 1.5);
-            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: data.color}));
-            mesh.position.set(x, data.scale/2, z);
-            scene.add(mesh);
-            animals.push({ mesh, type, weight: data.weight, leader: packLeader, velocity: new THREE.Vector3(Math.random()-0.5, 0, Math.random()-0.5) });
+        function buildAnimal(type, x, z, leader = null) {
+            const cfg = species[type];
+            const group = new THREE.Group();
+            
+            const body = new THREE.Mesh(new THREE.BoxGeometry(cfg.h*0.8, cfg.h*0.8, cfg.h*1.8), new THREE.MeshStandardMaterial({color: cfg.color}));
+            body.position.y = cfg.h;
+            
+            const neck = new THREE.Mesh(new THREE.BoxGeometry(cfg.h*0.4, cfg.h, cfg.h*0.4), new THREE.MeshStandardMaterial({color: cfg.color}));
+            neck.position.set(0, cfg.h*1.5, cfg.h*0.8);
+            neck.rotation.x = -0.5;
+
+            group.add(body, neck);
+            group.position.set(x, 0, z);
+            scene.add(group);
+            animals.push({ mesh: group, type, weight: cfg.weight, leader, vel: new THREE.Vector3(Math.random()-0.5, 0, Math.random()-0.5) });
         }
 
-        // Spawn Packs & Individuals
-        for(let i=0; i<5; i++) { // 5 Wolf Packs
-            let lx = (Math.random()-0.5)*4000, lz = (Math.random()-0.5)*4000;
-            spawnAnimal('wolf', lx, lz);
-            let leader = animals[animals.length-1];
-            for(let j=0; j<3; j++) spawnAnimal('wolf', lx+Math.random()*20, lz+Math.random()*20, leader);
+        // Spawn Packs & Wildlife
+        for(let i=0; i<6; i++) { // Wolf Packs
+            let lx = (Math.random()-0.5)*3000, lz = (Math.random()-0.5)*3000;
+            buildAnimal('wolf', lx, lz);
+            let alpha = animals[animals.length-1];
+            for(let j=0; j<3; j++) buildAnimal('wolf', lx+15, lz+15, alpha);
         }
-        ['elk', 'moose', 'deer', 'fox'].forEach(t => {
-            for(let i=0; i<15; i++) spawnAnimal(t, (Math.random()-0.5)*4000, (Math.random()-0.5)*4000);
-        });
+        ['moose','deer','fox'].forEach(s => { for(let i=0; i<15; i++) buildAnimal(s, (Math.random()-0.5)*4000, (Math.random()-0.5)*4000); });
 
-        // --- PLAYER & RIFLE ---
+        // --- PLAYER / WEAPON ---
         const rifle = new THREE.Group();
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 25), new THREE.MeshStandardMaterial({color: 0x111}));
-        barrel.rotation.x = Math.PI/2; barrel.position.z = -12;
-        rifle.add(barrel); rifle.position.set(0, -1.5, -2);
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 25), new THREE.MeshStandardMaterial({color:0x111, metalness:0.9}));
+        b.rotation.x = Math.PI/2; b.position.z = -12;
+        rifle.add(b); rifle.position.set(0, -1.4, -2.5);
         camera.add(rifle); scene.add(camera); camera.position.set(0, 25, 0);
 
-        // --- CONTROLS ---
+        // --- LOGIC ---
+        let yaw = 0, pitch = 0, money = 0, weight = 0;
         const keys = {};
-        window.onkeydown = (e) => { keys[e.key.toLowerCase()] = true; if(e.key==='b') document.getElementById('backpack-gui').style.display = 'block'; };
+        window.onkeydown = (e) => { keys[e.key.toLowerCase()] = true; if(e.key==='b') document.getElementById('backpack-ui').style.display = 'block'; };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
-        let yaw = 0, pitch = 0;
         document.addEventListener('pointermove', (e) => {
             if(document.pointerLockElement) {
                 yaw -= e.movementX * 0.002; pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.002));
             }
         });
+
         renderer.domElement.onclick = () => {
             renderer.domElement.requestPointerLock();
-            // Simple Raycast for Hunting
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(new THREE.Vector2(0,0), camera);
-            const hits = ray.intersectObjects(animals.map(a => a.mesh));
+            const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = ray.intersectObjects(animals.map(a => a.mesh), true);
             if(hits.length > 0) {
-                const hitMesh = hits[0].object;
-                const index = animals.findIndex(a => a.mesh === hitMesh);
-                if(index > -1 && currentWeight + animals[index].weight <= 50) {
-                    currentWeight += animals[index].weight;
-                    scene.remove(hitMesh);
-                    const li = document.createElement('li'); li.innerText = `${animals[index].type} (${animals[index].weight}kg)`;
-                    document.getElementById('item-list').appendChild(li);
-                    animals.splice(index, 1);
-                    document.getElementById('val-weight').innerText = currentWeight;
+                const hitObj = hits[0].object.parent;
+                const idx = animals.findIndex(a => a.mesh === hitObj);
+                if(idx > -1 && weight + animals[idx].weight <= 50) {
+                    weight += animals[idx].weight;
+                    scene.remove(hitObj); animals.splice(idx, 1);
+                    document.getElementById('weight').innerText = weight;
                 }
             }
         };
@@ -142,36 +151,33 @@
         function animate() {
             requestAnimationFrame(animate);
             const move = new THREE.Vector3();
-            if(keys.w) move.z -= 1.5; if(keys.s) move.z += 1.5;
-            if(keys.a) move.x -= 1.5; if(keys.d) move.x += 1.5;
+            if(keys.w) move.z -= 1.8; if(keys.s) move.z += 1.8;
+            if(keys.a) move.x -= 1.8; if(keys.d) move.x += 1.8;
             move.applyQuaternion(camera.quaternion); move.y = 0;
-            camera.position.add(move);
-            camera.rotation.set(pitch, yaw, 0, 'YXZ');
+            camera.position.add(move); camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
-            // AI Movement
+            // AI Pack & Movement Logic
             animals.forEach(a => {
-                if(a.leader) { // Follow Leader
-                    const toLeader = a.leader.mesh.position.clone().sub(a.mesh.position);
-                    if(toLeader.length() > 15) a.mesh.position.add(toLeader.normalize().multiplyScalar(0.4));
-                } else { // Wander
-                    a.mesh.position.add(a.velocity.clone().multiplyScalar(0.3));
-                    if(Math.random() > 0.99) a.velocity.set(Math.random()-0.5, 0, Math.random()-0.5);
+                if(a.leader) {
+                    const d = a.leader.mesh.position.clone().sub(a.mesh.position);
+                    if(d.length() > 20) a.mesh.position.add(d.normalize().multiplyScalar(0.6));
+                } else {
+                    a.mesh.position.add(a.vel.clone().multiplyScalar(0.4));
+                    if(Math.random() > 0.99) a.vel.set(Math.random()-0.5, 0, Math.random()-0.5);
+                    a.mesh.lookAt(a.mesh.position.clone().add(a.vel));
                 }
             });
 
-            // Minimap
-            const dx = SHOP_POS.x - camera.position.x, dz = SHOP_POS.z - camera.position.z;
-            document.getElementById('map-shop').style.left = (80 + dx/20)+'px';
-            document.getElementById('map-shop').style.top = (80 + dz/20)+'px';
-
-            // Sell Logic
-            if(camera.position.distanceTo(new THREE.Vector3(SHOP_POS.x, 0, SHOP_POS.z)) < 50 && currentWeight > 0) {
-                money += currentWeight * 10; currentWeight = 0;
-                document.getElementById('val-money').innerText = money;
-                document.getElementById('val-weight').innerText = "0";
-                document.getElementById('item-list').innerHTML = "";
+            // Minimap & Sell
+            const ds = camera.position.distanceTo(new THREE.Vector3(SHOP_POS.x, 0, SHOP_POS.z));
+            document.getElementById('map-s').style.left = (75 + (SHOP_POS.x-camera.position.x)/25)+'px';
+            document.getElementById('map-s').style.top = (75 + (SHOP_POS.z-camera.position.z)/25)+'px';
+            
+            if(ds < 60 && weight > 0) {
+                money += weight * 15; weight = 0;
+                document.getElementById('money').innerText = money;
+                document.getElementById('weight').innerText = "0";
             }
-
             renderer.render(scene, camera);
         }
         animate();
