@@ -1,17 +1,18 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Forest Hunter - Collision & Detail</title>
+    <title>Forest Hunter - Reverted Scale</title>
     <style>
         :root { --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); }
-        body { margin: 0; overflow: hidden; background: #0a0d10; font-family: sans-serif; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #05070a; font-family: sans-serif; touch-action: none; }
         #hud { position: absolute; bottom: 40px; left: 30px; display: grid; grid-template-areas: ". up ." "left down right"; gap: 15px; z-index: 10; pointer-events: none; }
         .control-node { pointer-events: auto; width: 65px; height: 65px; background: var(--glass); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4); font-weight: 800; user-select: none; -webkit-user-select: none; }
         .control-node:active { background: rgba(255, 255, 255, 0.2); color: #fff; }
         #w { grid-area: up; } #a { grid-area: left; } #s { grid-area: down; } #d { grid-area: right; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; background: white; border-radius: 50%; opacity: 0.5; pointer-events: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 16px; background: rgba(255,255,255,0.4); pointer-events: none; }
+        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 16px; height: 2px; background: rgba(255,255,255,0.4); }
     </style>
 </head>
 <body>
@@ -29,192 +30,157 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x14181c);
-        scene.fog = new THREE.FogExp2(0x14181c, 0.0025);
+        scene.background = new THREE.Color(0x0a0c0e);
+        scene.fog = new THREE.FogExp2(0x0a0c0e, 0.003);
 
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 15000);
         camera.position.set(0, 22, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-        const sun = new THREE.DirectionalLight(0xaabbff, 1.5);
-        sun.position.set(100, 200, 100);
-        scene.add(sun);
+        const sun = new THREE.DirectionalLight(0x445566, 2);
+        sun.position.set(50, 100, 50);
+        scene.add(sun, new THREE.AmbientLight(0xffffff, 0.2));
 
-        // --- WORLD DATA ---
-        const treePositions = [];
-        const treeCount = 30000;
-        const radius = 12000;
-
-        // --- COLLISION GRID ---
-        const gridSize = 100; // Size of each check zone
-        const grid = new Map();
-
-        function addToGrid(x, z, index) {
-            const gx = Math.floor(x / gridSize);
-            const gz = Math.floor(z / gridSize);
-            const key = `${gx},${gz}`;
-            if (!grid.has(key)) grid.set(key, []);
-            grid.get(key).push(index);
+        // --- DETAILED GROUND ---
+        const canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0f120a';
+        ctx.fillRect(0, 0, 256, 256);
+        for(let i=0; i<5000; i++) {
+            ctx.fillStyle = `rgba(40, 50, 20, ${Math.random() * 0.5})`;
+            ctx.fillRect(Math.random()*256, Math.random()*256, 2, 2);
         }
+        const groundTex = new THREE.CanvasTexture(canvas);
+        groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+        groundTex.repeat.set(1000, 1000);
 
-        // --- TREES ---
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x221814 });
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x0f1a0f, flatShading: true });
-        const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(3, 4.5, 80, 4), trunkMat, treeCount);
-        const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(40, 120, 4), leafMat, treeCount);
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(30000, 30000),
+            new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.9 })
+        );
+        floor.rotation.x = -Math.PI/2;
+        scene.add(floor);
+
+        // --- TREE COLLISION SYSTEM (REVERTED SCALE) ---
+        const treePositions = [];
+        const treeCount = 25000;
+        const radius = 10000;
+        const grid = new Map();
+        const gridSize = 120;
+
+        const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(2, 4, 100, 5), new THREE.MeshStandardMaterial({ color: 0x1a1512 }), treeCount);
+        const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(35, 140, 4), new THREE.MeshStandardMaterial({ color: 0x0a140a, flatShading: true }), treeCount);
 
         const dummy = new THREE.Object3D();
         for (let i = 0; i < treeCount; i++) {
             const r = Math.sqrt(Math.random()) * radius;
             const theta = Math.random() * Math.PI * 2;
-            const x = r * Math.cos(theta);
-            const z = r * Math.sin(theta);
-            const s = 0.5 + Math.random() * 1.5;
-
-            dummy.position.set(x, 0, z);
-            dummy.scale.set(s, s, s);
+            const x = r * Math.cos(theta); const z = r * Math.sin(theta);
+            const s = 0.6 + Math.random() * 1.4;
+            
+            dummy.position.set(x, 0, z); 
+            dummy.scale.set(s, s, s); 
             dummy.rotation.y = Math.random() * Math.PI;
             dummy.updateMatrix();
             
-            trunkMesh.setMatrixAt(i, dummy.matrix);
+            trunkMesh.setMatrixAt(i, dummy.matrix); 
             leafMesh.setMatrixAt(i, dummy.matrix);
             
-            treePositions.push({ x, z, r: 6 * s }); // Collision radius
-            addToGrid(x, z, i);
+            treePositions.push({ x, z, r: 5 * s });
+            const gx = Math.floor(x/gridSize), gz = Math.floor(z/gridSize), key = `${gx},${gz}`;
+            if(!grid.has(key)) grid.set(key, []); grid.get(key).push(i);
         }
         scene.add(trunkMesh, leafMesh);
 
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(30000, 30000), new THREE.MeshStandardMaterial({ color: 0x080a08 }));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-
-        // --- THE RIFLE ---
+        // --- HIGH DETAIL RIFLE ---
         const rifle = new THREE.Group();
-        const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2314, roughness: 0.6 });
-        const metalMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 });
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x2a1a0f, roughness: 0.7 });
+        const steelMat = new THREE.MeshStandardMaterial({ color: 0x151517, metalness: 0.9, roughness: 0.2 });
 
-        // Stock/Body
-        const stock = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 12), woodMat);
-        stock.position.set(0, -1, -2);
-        stock.rotation.x = -0.1;
-        rifle.add(stock);
+        const stockMain = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 10), woodMat);
+        stockMain.position.set(0, -0.5, 0); rifle.add(stockMain);
 
-        // Barrel
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 22, 8), metalMat);
-        barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.2, -12);
-        rifle.add(barrel);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 25, 12), steelMat);
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.5, -12); rifle.add(barrel);
 
-        // Scope
-        const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 8, 12), metalMat);
-        scope.rotation.x = Math.PI / 2;
-        scope.position.set(0, 1.2, -6);
-        rifle.add(scope);
+        const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 9, 12), steelMat);
+        scope.rotation.x = Math.PI/2; scope.position.set(0, 1.6, -5); rifle.add(scope);
         
-        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.4, 12), new THREE.MeshPhongMaterial({ color: 0x00ffff, opacity: 0.3, transparent: true }));
-        lens.position.set(0, 1.2, -2.1);
-        rifle.add(lens);
+        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16), new THREE.MeshStandardMaterial({ color: 0x001122, emissive: 0x003366, metalness: 1 }));
+        lens.position.set(0, 1.6, -0.45); rifle.add(lens);
 
-        rifle.position.set(2, -1.5, -3); // Hold position
-        camera.add(rifle);
-        scene.add(camera);
+        rifle.position.set(1.8, -1.8, -2.5);
+        camera.add(rifle); scene.add(camera);
 
-        // --- INPUT & MOVEMENT ---
-        let yaw = 0, pitch = 0;
+        // --- PHYSICS & INPUT ---
+        let yaw = 0, pitch = 0, stride = 0, speed = 0;
         const keys = { w: false, a: false, s: false, d: false };
-        window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(); if (keys.hasOwnProperty(k)) keys[k] = true; });
-        window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (keys.hasOwnProperty(k)) keys[k] = false; });
+        window.onkeydown = (e) => { const k = e.key.toLowerCase(); if(keys.hasOwnProperty(k)) keys[k]=true; };
+        window.onkeyup = (e) => { const k = e.key.toLowerCase(); if(keys.hasOwnProperty(k)) keys[k]=false; };
 
-        let lastX = 0, lastY = 0;
-        document.addEventListener('pointermove', (e) => {
-            if (e.buttons > 0 || e.pointerType === 'touch') {
-                yaw -= (e.movementX || (e.clientX - lastX)) * 0.002;
-                pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.movementY || (e.clientY - lastY)) * 0.002));
+        let lx = 0, ly = 0;
+        document.onpointermove = (e) => {
+            if(e.buttons > 0 || e.pointerType === 'touch') {
+                yaw -= (e.movementX || e.clientX - lx) * 0.002;
+                pitch = Math.max(-1.4, Math.min(1.4, pitch - (e.movementY || e.clientY - ly) * 0.002));
             }
-            lastX = e.clientX; lastY = e.clientY;
-        });
+            lx = e.clientX; ly = e.clientY;
+        };
 
-        // --- COLLISION LOGIC ---
-        function checkCollision(newPos) {
-            const gx = Math.floor(newPos.x / gridSize);
-            const gz = Math.floor(newPos.z / gridSize);
-            const playerR = 4; // Player hit thickness
-
-            for (let x = gx - 1; x <= gx + 1; x++) {
-                for (let z = gz - 1; z <= gz + 1; z++) {
-                    const key = `${x},${z}`;
-                    const cell = grid.get(key);
-                    if (cell) {
-                        for (const idx of cell) {
-                            const tree = treePositions[idx];
-                            const dx = newPos.x - tree.x;
-                            const dz = newPos.z - tree.z;
-                            const distSq = dx * dx + dz * dz;
-                            const minDist = tree.r + playerR;
-                            if (distSq < minDist * minDist) return true;
-                        }
+        function checkHit(p) {
+            const gx = Math.floor(p.x/gridSize), gz = Math.floor(p.z/gridSize);
+            for(let x=gx-1; x<=gx+1; x++) {
+                for(let z=gz-1; z<=gz+1; z++) {
+                    const cell = grid.get(`${x},${z}`);
+                    if(cell) for(const i of cell) {
+                        const t = treePositions[i], dx = p.x-t.x, dz = p.z-t.z;
+                        if(dx*dx + dz*dz < (t.r+3)**2) return true;
                     }
                 }
             }
             return false;
         }
 
-        // --- ANIMATION ---
-        let stride = 0, speed = 0;
         function animate() {
             requestAnimationFrame(animate);
-            
             const move = new THREE.Vector3();
-            if (keys.w) move.z -= 1; if (keys.s) move.z += 1;
-            if (keys.a) move.x -= 1; if (keys.d) move.x += 1;
+            if(keys.w) move.z -= 1; if(keys.s) move.z += 1;
+            if(keys.a) move.x -= 1; if(keys.d) move.x += 1;
 
-            if (move.lengthSq() > 0) {
-                speed = THREE.MathUtils.lerp(speed, 1.4, 0.05);
+            if(move.lengthSq() > 0) {
+                speed = THREE.MathUtils.lerp(speed, 1.5, 0.05);
                 move.normalize().applyQuaternion(camera.quaternion);
                 move.y = 0;
-                
-                // Try X movement
-                const nextX = new THREE.Vector3(camera.position.x + move.x * speed, camera.position.y, camera.position.z);
-                if (!checkCollision(nextX)) camera.position.x = nextX.x;
-                
-                // Try Z movement
-                const nextZ = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z + move.z * speed);
-                if (!checkCollision(nextZ)) camera.position.z = nextZ.z;
-
+                const next = camera.position.clone().addScaledVector(move, speed);
+                if(!checkHit({x: next.x, z: camera.position.z})) camera.position.x = next.x;
+                if(!checkHit({x: camera.position.x, z: next.z})) camera.position.z = next.z;
                 stride += 0.08;
-                camera.position.y = 22 + Math.sin(stride) * 0.3;
-                
-                // Rifle Bobbing
-                rifle.position.y = -1.5 + Math.sin(stride * 2) * 0.05;
-                rifle.position.x = 2 + Math.cos(stride) * 0.05;
+                camera.position.y = 22 + Math.sin(stride) * 0.25;
+                rifle.position.y = -1.8 + Math.sin(stride*2) * 0.04;
             } else {
-                speed = 0;
-                camera.position.y = THREE.MathUtils.lerp(camera.position.y, 22, 0.1);
+                speed = 0; camera.position.y = THREE.MathUtils.lerp(camera.position.y, 22, 0.1);
             }
-
             camera.rotation.set(pitch, yaw, 0, 'YXZ');
             renderer.render(scene, camera);
         }
         animate();
 
-        window.addEventListener('resize', () => {
+        window.onresize = () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-        
+        };
         ['w', 'a', 's', 'd'].forEach(k => {
             const el = document.getElementById(k);
-            el.addEventListener('pointerdown', () => keys[k] = true);
-            el.addEventListener('pointerup', () => keys[k] = false);
+            el.onpointerdown = (e) => { e.preventDefault(); keys[k] = true; };
+            el.onpointerup = () => keys[k] = false;
         });
     </script>
 </body>
