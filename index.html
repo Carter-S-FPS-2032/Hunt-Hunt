@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D World: Massive Forest Fixed Trunk</title>
+    <title>3D World: Dense Forest - Bottom Pierce</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #a3b1c6; font-family: sans-serif; touch-action: none; }
         #controls { position: absolute; bottom: 30px; left: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
@@ -46,9 +46,9 @@
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xa3b1c6); 
-        scene.fog = new THREE.Fog(0xa3b1c6, 20, 1500);
+        scene.fog = new THREE.Fog(0xa3b1c6, 10, 2000);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(0, 15, 0); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -57,38 +57,38 @@
         document.body.appendChild(renderer.domElement);
 
         scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.5));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
         dirLight.position.set(100, 200, 100);
         scene.add(dirLight);
 
         // --- FOREST FLOOR ---
         const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(8000, 8000),
-            new THREE.MeshPhongMaterial({ color: 0x2b1d0e })
+            new THREE.PlaneGeometry(10000, 10000),
+            new THREE.MeshPhongMaterial({ color: 0x2b1d0e }) 
         );
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // --- FIXED TRUNK & TREE MERGING ---
-        // Creating a single optimized geometry for the whole tree
-        function getTreeGeometry() {
+        // --- REFINED TREE BUILDER ---
+        function buildTreeGeometry() {
             const geometries = [];
 
-            // 1. FIXED TRUNK: One long cylinder that pierces the leaves
-            const trunkGeo = new THREE.CylinderGeometry(2.5, 4, 130, 8);
-            trunkGeo.translate(0, 65, 0); // Position so base is at 0
+            // TRUNK: Only pierces the bottom-most leaf layer
+            // Trunk height is 60, bottom leaf starts at y=45. It pierces 15 units into the first cone.
+            const trunkGeo = new THREE.CylinderGeometry(2.5, 4.5, 60, 8);
+            trunkGeo.translate(0, 30, 0); 
             geometries.push(trunkGeo);
 
-            // 2. LEAF LAYERS: Overlapping cones
+            // OVERLAPPING LEAVES
             const layers = [
-                { rad: 35, height: 50, y: 45 }, 
-                { rad: 28, height: 42, y: 75 }, 
-                { rad: 20, height: 35, y: 100 }, 
-                { rad: 12, height: 30, y: 125 }
+                { rad: 38, height: 55, y: 45 }, // Trunk pierces this one only
+                { rad: 30, height: 48, y: 78 }, 
+                { rad: 22, height: 40, y: 105 }, 
+                { rad: 14, height: 35, y: 130 }
             ];
 
             layers.forEach(l => {
-                const leaf = new THREE.ConeGeometry(l.rad, l.height, 10);
+                const leaf = new THREE.ConeGeometry(l.rad, l.height, 12);
                 leaf.translate(0, l.y, 0);
                 geometries.push(leaf);
             });
@@ -96,9 +96,9 @@
             return BufferGeometryUtils.mergeGeometries(geometries);
         }
 
-        // --- INSTANCED RENDERING (FOR EVEN MORE TREES) ---
-        const TREE_COUNT = 1500; // Massively increased count
-        const treeGeo = getTreeGeometry();
+        // --- DENSE INSTANCING (4000 TREES) ---
+        const TREE_COUNT = 4000; 
+        const treeGeo = buildTreeGeometry();
         const treeMat = new THREE.MeshPhongMaterial({ 
             color: 0x355E3B, 
             flatShading: true 
@@ -108,40 +108,47 @@
         const dummy = new THREE.Object3D();
 
         for (let i = 0; i < TREE_COUNT; i++) {
-            const x = (Math.random() - 0.5) * 6000;
-            const z = (Math.random() - 0.5) * 6000;
+            const spread = 9000;
+            const x = (Math.random() - 0.5) * spread;
+            const z = (Math.random() - 0.5) * spread;
+            
+            // Keep the spawn point clear
+            if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+
             dummy.position.set(x, 0, z);
             dummy.rotation.y = Math.random() * Math.PI;
-            const s = 0.5 + Math.random() * 1.0;
+            
+            const s = 0.5 + Math.random() * 1.5;
             dummy.scale.set(s, s, s);
+            
             dummy.updateMatrix();
             instancedTrees.setMatrixAt(i, dummy.matrix);
         }
         scene.add(instancedTrees);
 
-        // --- MOVEMENT ---
+        // --- CONTROLS ---
         let lon = 0, lat = 0, startX = 0, startY = 0, startLon = 0, startLat = 0;
         document.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('btn')) return;
             startX = e.clientX; startY = e.clientY;
             startLon = lon; startLat = lat;
-            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointermove', lookAround);
         });
-        const onPointerMove = (e) => {
+        const lookAround = (e) => {
             lon = (startX - e.clientX) * 0.15 + startLon;
             lat = (e.clientY - startY) * 0.15 + startLat;
             lat = Math.max(-85, Math.min(85, lat));
         };
-        document.addEventListener('pointerup', () => document.removeEventListener('pointermove', onPointerMove));
+        document.addEventListener('pointerup', () => document.removeEventListener('pointermove', lookAround));
 
         const keys = { w: false, a: false, s: false, d: false };
-        const setup = (id, k) => {
+        const bind = (id, k) => {
             const el = document.getElementById(id);
             el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
             el.addEventListener('pointerup', () => keys[k] = false);
             el.addEventListener('pointerleave', () => keys[k] = false);
         };
-        ['w','a','s','d'].forEach(k => setup(`btn-${k}`, k));
+        ['w','a','s','d'].forEach(k => bind(`btn-${k}`, k));
 
         let bob = 0;
         function animate() {
@@ -155,7 +162,7 @@
             const forward = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta);
             const right = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta + Math.PI/2);
             
-            const speed = 1.2; 
+            const speed = 1.1; 
             if (keys.w) camera.position.addScaledVector(forward, speed);
             if (keys.s) camera.position.addScaledVector(forward, -speed);
             if (keys.a) camera.position.addScaledVector(right, -speed);
