@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D World: Scattered Nature</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; text-shadow: 1px 1px 2px black; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>Nature Scatter System</h1>
+        <p>Status: <span id="status">Scattering assets...</span></p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(10, 10, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+
+        // --- SCATTER SETTINGS ---
+        const MAP_SIZE = 50;
+        const GRASS_COUNT = 500;
+        const ROCK_COUNT = 100;
+        const loader = new FBXLoader();
+
+        /**
+         * Scatters instances of a model across the map
+         */
+        function scatterAsset(name, count, isGrass) {
+            loader.load(`./assets/${name}.fbx`, (fbx) => {
+                let sourceMesh;
+                fbx.traverse(child => { if (child.isMesh) sourceMesh = child; });
+
+                if (!sourceMesh) return;
+
+                // Create InstancedMesh for performance
+                const material = new THREE.MeshPhongMaterial({
+                    vertexColors: isGrass, // Grass "colors itself"
+                    color: isGrass ? 0xffffff : 0x444444, // Rocks are darker/grey
+                    shininess: 5
+                });
+
+                const instancedMesh = new THREE.InstancedMesh(sourceMesh.geometry, material, count);
+                const matrix = new THREE.Matrix4();
+                const position = new THREE.Vector3();
+                const rotation = new THREE.Euler();
+                const scale = new THREE.Vector3();
+
+                for (let i = 0; i < count; i++) {
+                    // Random Position
+                    position.set(
+                        (Math.random() - 0.5) * MAP_SIZE,
+                        0, 
+                        (Math.random() - 0.5) * MAP_SIZE
+                    );
+
+                    // Random Rotation (Y-axis)
+                    rotation.set(0, Math.random() * Math.PI * 2, 0);
+
+                    // Scaling Logic
+                    if (isGrass) {
+                        const s = 0.5 + Math.random() * 0.5; // Grass variety
+                        scale.set(s, s, s);
+                    } else {
+                        const s = 0.1 + Math.random() * 0.2; // ROCKS ARE SMALLER NOW
+                        scale.set(s, s, s);
+                    }
+
+                    matrix.compose(position, new THREE.Quaternion().setFromEuler(rotation), scale);
+                    instancedMesh.setMatrixAt(i, matrix);
+                }
+
+                scene.add(instancedMesh);
+                document.getElementById('status').innerText = "Map Populated Successfully";
+            });
+        }
+
+        // Run the scatter
+        scatterAsset("Grass", GRASS_COUNT, true);
+        scatterAsset("smallrocks", ROCK_COUNT, false);
+
+        // --- FLOOR GRID ---
+        const grid = new THREE.GridHelper(MAP_SIZE, 20, 0x333333, 0x222222);
+        scene.add(grid);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
