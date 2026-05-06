@@ -3,100 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D World: Maximum Density</title>
+    <title>3D World: Hard Reset</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #a3b1c6; touch-action: none; font-family: sans-serif; }
-        
-        #ui-layer {
-            position: absolute;
-            bottom: 40px;
-            left: 25px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 1000;
-        }
-        .btn-row { display: flex; gap: 10px; justify-content: center; }
-        .control-btn {
-            width: 70px;
-            height: 70px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            color: white;
-            font-size: 22px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
+        body { margin: 0; overflow: hidden; background-color: #a3b1c6; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; }
+        #ui { position: absolute; bottom: 40px; left: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 999; }
+        .row { display: flex; gap: 10px; justify-content: center; }
+        .btn { 
+            width: 70px; height: 70px; background: rgba(0,0,0,0.6); 
+            border: 2px solid #fff3; border-radius: 15px; 
+            color: white; font: bold 20px sans-serif;
+            display: flex; align-items: center; justify-content: center;
         }
     </style>
 </head>
 <body>
-
-    <div id="ui-layer">
-        <div class="btn-row"><div class="control-btn" id="up">W</div></div>
-        <div class="btn-row">
-            <div class="control-btn" id="left">A</div>
-            <div class="control-btn" id="down">S</div>
-            <div class="control-btn" id="right">D</div>
+    <div id="ui">
+        <div class="row"><div class="btn" id="w">W</div></div>
+        <div class="row">
+            <div class="btn" id="a">A</div>
+            <div class="btn" id="s">S</div>
+            <div class="btn" id="d">D</div>
         </div>
     </div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
         import { BufferGeometryUtils } from 'three/addons/utils/BufferGeometryUtils.js';
 
-        // 1. Setup
+        // 1. SCENE SETUP
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xa3b1c6);
-        scene.fog = new THREE.Fog(0xa3b1c6, 50, 4000);
+        scene.fog = new THREE.Fog(0xa3b1c6, 1, 5000);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 7000);
-        camera.position.set(0, 18, 0);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 15, 0);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.0));
-        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-        sun.position.set(100, 200, 100);
-        scene.add(sun);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
+        const L = new THREE.DirectionalLight(0xffffff, 1);
+        L.position.set(10, 20, 10);
+        scene.add(L);
 
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(12000, 12000),
-            new THREE.MeshPhongMaterial({ color: 0x2b1d0e })
-        );
+        // 2. GROUND
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(15000, 15000), new THREE.MeshPhongMaterial({ color: 0x2b1d0e }));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        // 2. Optimized Tree (Fixed Trunk)
-        function getTree() {
+        // 3. TREE GEOMETRY (Matching IMG_0019.jpeg)
+        function makeTree() {
             const parts = [];
-            // Trunk: ONLY the bottom pillar
-            const trunk = new THREE.CylinderGeometry(2.5, 4.5, 65, 8);
-            trunk.translate(0, 32.5, 0);
+            // Trunk only pierces the bottom layer
+            const trunk = new THREE.CylinderGeometry(3, 5, 60, 8);
+            trunk.translate(0, 30, 0);
             parts.push(trunk);
 
-            // Stacked Cones
-            const layers = [
-                { r: 45, h: 65, y: 55 },
-                { r: 35, h: 55, y: 95 },
-                { r: 25, h: 45, y: 130 },
-                { r: 15, h: 35, y: 160 }
-            ];
+            const layers = [{r:45, h:60, y:50}, {r:35, h:50, y:85}, {r:25, h:40, y:115}, {r:15, h:30, y:140}];
             layers.forEach(l => {
                 const c = new THREE.ConeGeometry(l.r, l.h, 10);
                 c.translate(0, l.y, 0);
@@ -105,74 +74,62 @@
             return BufferGeometryUtils.mergeGeometries(parts);
         }
 
-        // 3. Dense Forest (NO Spawn Protection)
-        const treeCount = 6000;
-        const treeMesh = new THREE.InstancedMesh(
-            getTree(),
-            new THREE.MeshPhongMaterial({ color: 0x355E3B, flatShading: true }),
-            treeCount
-        );
-        
+        // 4. THE FOREST (NO SPAWN PROTECTION)
+        const count = 5000;
+        const mesh = new THREE.InstancedMesh(makeTree(), new THREE.MeshPhongMaterial({ color: 0x355E3B, flatShading: true }), count);
         const dummy = new THREE.Object3D();
-        for (let i = 0; i < treeCount; i++) {
-            const x = (Math.random() - 0.5) * 11000;
-            const z = (Math.random() - 0.5) * 11000;
-            
-            dummy.position.set(x, 0, z);
+        for (let i = 0; i < count; i++) {
+            dummy.position.set((Math.random()-0.5)*12000, 0, (Math.random()-0.5)*12000);
             dummy.rotation.y = Math.random() * Math.PI;
             const s = 0.5 + Math.random() * 1.5;
-            dummy.scale.set(s, s, s);
+            dummy.scale.set(s,s,s);
             dummy.updateMatrix();
-            treeMesh.setMatrixAt(i, dummy.matrix);
+            mesh.setMatrixAt(i, dummy.matrix);
         }
-        scene.add(treeMesh);
+        scene.add(mesh);
 
-        // 4. Movement & Input
+        // 5. INPUTS
         let yaw = 0, pitch = 0;
         document.addEventListener('pointermove', (e) => {
-            if (e.pointerType === 'touch' || e.buttons > 0) {
-                yaw -= e.movementX * 0.003;
-                pitch -= e.movementY * 0.003;
-                pitch = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
+            if (e.buttons > 0 || e.pointerType === 'touch') {
+                yaw -= e.movementX * 0.004;
+                pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.004));
             }
         });
 
-        const keys = { w: false, a: false, s: false, d: false };
-        const bind = (id, k) => {
+        const keys = { w:0, a:0, s:0, d:0 };
+        const listen = (id, k) => {
             const el = document.getElementById(id);
-            el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
-            el.addEventListener('pointerup', () => keys[k] = false);
-            el.addEventListener('pointerleave', () => keys[k] = false);
+            el.onpointerdown = (e) => { e.preventDefault(); keys[k] = 1; };
+            el.onpointerup = el.onpointerleave = () => keys[k] = 0;
         };
-        bind('up','w'); bind('left','a'); bind('down','s'); bind('right','d');
+        ['w','a','s','d'].forEach(k => listen(k, k));
 
-        let walk = 0;
-        function loop() {
-            requestAnimationFrame(loop);
+        // 6. LOOP
+        let bob = 0;
+        function tick() {
+            requestAnimationFrame(tick);
             camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
-
-            const move = new THREE.Vector3();
-            if (keys.w) move.z -= 1;
-            if (keys.s) move.z += 1;
-            if (keys.a) move.x -= 1;
-            if (keys.d) move.x += 1;
-
-            if (move.lengthSq() > 0) {
-                move.normalize().applyQuaternion(camera.quaternion);
-                move.y = 0;
-                camera.position.addScaledVector(move, 1.4);
-                walk += 0.15;
-                camera.position.y = 18 + Math.sin(walk) * 0.4;
+            const dir = new THREE.Vector3(0,0,0);
+            if(keys.w) dir.z -= 1; if(keys.s) dir.z += 1;
+            if(keys.a) dir.x -= 1; if(keys.d) dir.x += 1;
+            
+            if(dir.lengthSq() > 0) {
+                dir.normalize().applyQuaternion(camera.quaternion);
+                dir.y = 0;
+                camera.position.addScaledVector(dir, 1.5);
+                bob += 0.15;
+                camera.position.y = 15 + Math.sin(bob) * 0.4;
             }
             renderer.render(scene, camera);
         }
-        loop();
+        tick();
 
-        window.addEventListener('resize', () => {
+        window.onresize = () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        };
     </script>
 </body>
 </html>
