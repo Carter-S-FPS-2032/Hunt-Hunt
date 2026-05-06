@@ -1,49 +1,68 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Forest - Ground Up Rewrite</title>
+    <title>3D Stylized Forest</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #a3b1c6; touch-action: none; -webkit-user-select: none; user-select: none; }
-        
-        #controls {
-            position: absolute;
-            bottom: 50px;
-            left: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 100;
+        :root {
+            --glass: rgba(255, 255, 255, 0.1);
+            --border: rgba(255, 255, 255, 0.2);
         }
-        .btn-row { display: flex; gap: 12px; justify-content: center; }
-        .key-btn {
-            width: 72px;
-            height: 72px;
-            background: rgba(15, 15, 15, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 18px;
-            color: #ffffff;
-            font-family: system-ui, -apple-system, sans-serif;
-            font-size: 24px;
-            font-weight: 700;
+        body { margin: 0; overflow: hidden; background: #87ceeb; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        
+        /* New HUD Style */
+        #hud {
+            position: absolute;
+            bottom: 40px;
+            left: 30px;
+            display: grid;
+            grid-template-areas: 
+                ". up ."
+                "left down right";
+            gap: 12px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .control-node {
+            pointer-events: auto;
+            width: 75px;
+            height: 75px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(5px);
+            color: white;
+            font-weight: 800;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.1s, background 0.1s;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        .key-btn:active { background: rgba(255, 255, 255, 0.2); }
+
+        .control-node:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #w { grid-area: up; }
+        #a { grid-area: left; }
+        #s { grid-area: down; }
+        #d { grid-area: right; }
     </style>
 </head>
 <body>
 
-    <div id="controls">
-        <div class="btn-row"><div class="key-btn" id="up">W</div></div>
-        <div class="btn-row">
-            <div class="key-btn" id="left">A</div>
-            <div class="key-btn" id="down">S</div>
-            <div class="key-btn" id="right">D</div>
-        </div>
+    <div id="hud">
+        <div class="control-node" id="w">W</div>
+        <div class="control-node" id="a">A</div>
+        <div class="control-node" id="s">S</div>
+        <div class="control-node" id="d">D</div>
     </div>
 
     <script type="importmap">
@@ -59,125 +78,116 @@
         import * as THREE from 'three';
         import { BufferGeometryUtils } from 'three/addons/utils/BufferGeometryUtils.js';
 
-        // --- RENDERER SETUP ---
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        document.body.appendChild(renderer.domElement);
-
+        // --- SCENE & RENDERER ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xa3b1c6);
-        scene.fog = new THREE.Fog(0xa3b1c6, 20, 4500);
+        scene.fog = new THREE.FogExp2(0xa3b1c6, 0.0012);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 8000);
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 10000);
         camera.position.set(0, 18, 0);
 
-        // --- LIGHTING ---
-        const ambient = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
-        scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(50, 150, 50);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        // --- LIGHTS ---
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(50, 100, 50);
         scene.add(sun);
 
-        // --- GROUND ---
-        const ground = new THREE.Mesh(
+        // --- WORLD OBJECTS ---
+        const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(15000, 15000),
-            new THREE.MeshPhongMaterial({ color: 0x2b1d0e })
+            new THREE.MeshStandardMaterial({ color: 0x241d14, roughness: 0.9 })
         );
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-        // --- TREE GENERATOR (TRUNK ONLY BOTTOM) ---
-        function createTreeGeom() {
-            const parts = [];
+        function createStylizedTree() {
+            const geoms = [];
+            
+            // Trunk: Stops at the bottom of the foliage
+            const trunk = new THREE.CylinderGeometry(3, 5, 60, 6);
+            trunk.translate(0, 30, 0);
+            geoms.push(trunk);
 
-            // Short Trunk: Base up to bottom of first cone
-            const trunkHeight = 60;
-            const trunk = new THREE.CylinderGeometry(2.8, 5, trunkHeight, 8);
-            trunk.translate(0, trunkHeight / 2, 0);
-            parts.push(trunk);
-
-            // Leaf Stack
+            // Foliage: 4 layers
             const layers = [
-                { r: 48, h: 65, y: 50 },  // Bottom cone covers top of trunk
-                { r: 38, h: 55, y: 90 },
-                { r: 28, h: 45, y: 125 },
-                { r: 18, h: 35, y: 155 }
+                { r: 45, h: 60, y: 55 },
+                { r: 35, h: 50, y: 95 },
+                { r: 25, h: 40, y: 130 },
+                { r: 15, h: 30, y: 155 }
             ];
 
-            layers.forEach(layer => {
-                const cone = new THREE.ConeGeometry(layer.r, layer.h, 10);
-                cone.translate(0, layer.y, 0);
-                parts.push(cone);
+            layers.forEach(l => {
+                const cone = new THREE.ConeGeometry(l.r, l.h, 6);
+                cone.translate(0, l.y, 0);
+                geoms.push(cone);
             });
 
-            return BufferGeometryUtils.mergeGeometries(parts);
+            return BufferGeometryUtils.mergeGeometries(geoms);
         }
 
-        // --- INSTANCING SYSTEM ---
-        const treeCount = 6500;
-        const geometry = createTreeGeom();
-        const material = new THREE.MeshPhongMaterial({ color: 0x355E3B, flatShading: true });
-        const forest = new THREE.InstancedMesh(geometry, material, treeCount);
-
-        const matrix = new THREE.Matrix4();
-        const rotation = new THREE.Quaternion();
-        const position = new THREE.Vector3();
-        const scale = new THREE.Vector3();
-
-        for (let i = 0; i < treeCount; i++) {
-            position.set((Math.random() - 0.5) * 13000, 0, (Math.random() - 0.5) * 13000);
-            rotation.setFromEuler(new THREE.Euler(0, Math.random() * Math.PI, 0));
-            const s = 0.6 + Math.random() * 1.5;
-            scale.set(s, s, s);
-            
-            matrix.compose(position, rotation, scale);
-            forest.setMatrixAt(i, matrix);
+        const count = 6000;
+        const treeMat = new THREE.MeshStandardMaterial({ color: 0x2d4c2d, flatShading: true });
+        const trees = new THREE.InstancedMesh(createStylizedTree(), treeMat, count);
+        
+        const dummy = new THREE.Object3D();
+        for (let i = 0; i < count; i++) {
+            dummy.position.set((Math.random() - 0.5) * 12000, 0, (Math.random() - 0.5) * 12000);
+            dummy.rotation.y = Math.random() * Math.PI;
+            const s = 0.5 + Math.random() * 1.5;
+            dummy.scale.set(s, s, s);
+            dummy.updateMatrix();
+            trees.setMatrixAt(i, dummy.matrix);
         }
-        scene.add(forest);
+        scene.add(trees);
 
-        // --- MOVEMENT & CONTROLS ---
+        // --- CONTROLS ---
         let yaw = 0, pitch = 0;
         const keys = { w: false, a: false, s: false, d: false };
 
         const bind = (id, k) => {
             const el = document.getElementById(id);
-            el.onpointerdown = (e) => { e.preventDefault(); keys[k] = true; };
-            el.onpointerup = el.onpointerleave = () => keys[k] = false;
+            el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
+            el.addEventListener('pointerup', () => keys[k] = false);
+            el.addEventListener('pointerleave', () => keys[k] = false);
         };
-        bind('up', 'w'); bind('left', 'a'); bind('down', 's'); bind('right', 'd');
+        ['w', 'a', 's', 'd'].forEach(k => bind(k, k));
 
         document.addEventListener('pointermove', (e) => {
-            if (e.pointerType === 'touch' || e.buttons > 0) {
+            if (e.buttons > 0 || e.pointerType === 'touch') {
                 yaw -= e.movementX * 0.003;
-                pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.003));
+                pitch = Math.max(-1.4, Math.min(1.4, pitch - e.movementY * 0.003));
             }
         });
 
-        // --- ANIMATION LOOP ---
+        // --- LOOP ---
         let bob = 0;
-        function render() {
-            requestAnimationFrame(render);
-
+        function animate() {
+            requestAnimationFrame(animate);
             camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
 
-            const dir = new THREE.Vector3();
-            if (keys.w) dir.z -= 1;
-            if (keys.s) dir.z += 1;
-            if (keys.a) dir.x -= 1;
-            if (keys.d) dir.x += 1;
+            const move = new THREE.Vector3();
+            if (keys.w) move.z -= 1;
+            if (keys.s) move.z += 1;
+            if (keys.a) move.x -= 1;
+            if (keys.d) move.x += 1;
 
-            if (dir.lengthSq() > 0) {
-                dir.normalize().applyQuaternion(camera.quaternion);
-                dir.y = 0;
-                camera.position.addScaledVector(dir, 1.8);
-                bob += 0.16;
-                camera.position.y = 18 + Math.sin(bob) * 0.5;
+            if (move.lengthSq() > 0) {
+                move.normalize().applyQuaternion(camera.quaternion);
+                move.y = 0;
+                camera.position.addScaledVector(move, 1.8);
+                bob += 0.15;
+                camera.position.y = 18 + Math.sin(bob) * 0.4;
             }
 
             renderer.render(scene, camera);
         }
-        render();
+        animate();
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
