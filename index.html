@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hunt-Hunt Game World</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; text-shadow: 1px 1px 2px black; }
+    </style>
+</head>
+<body>
+<div id="ui">Loading Assets from /assets...</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // 1. SCENE & CAMERA SETUP
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Sky Blue
+    scene.fog = new THREE.Fog(0x87ceeb, 500, 1500);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+    camera.position.set(200, 100, 200);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // 2. LIGHTING
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(200, 400, 100);
+    sun.castShadow = true;
+    sun.shadow.camera.left = -1000;
+    sun.shadow.camera.right = 1000;
+    sun.shadow.camera.top = 1000;
+    sun.shadow.camera.bottom = -1000;
+    scene.add(sun);
+
+    // 3. THE HUGE MAP GROUND
+    const groundGeo = new THREE.PlaneGeometry(2500, 2500);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // 4. ASSET LOADING (Referencing IMG_0015.jpg structure)
+    const loadingManager = new THREE.LoadingManager();
+    const fbxLoader = new FBXLoader(loadingManager);
+    const textureLoader = new THREE.TextureLoader(loadingManager);
+
+    let assets = { rocks: null, trees: null, grass: null };
+
+    // Rock Material Config[cite: 1]
+    const rockMat = new THREE.MeshStandardMaterial({
+        map: textureLoader.load('assets/smallrocksColor.png'),
+        normalMap: textureLoader.load('assets/smallrocksNormal.png'),
+        roughness: 0.9,
+        side: THREE.DoubleSide // Matches 'CullingOff'[cite: 1]
+    });
+
+    // Load FBX Files
+    fbxLoader.load('assets/rocks.fbx', (fbx) => { assets.rocks = fbx; });
+    fbxLoader.load('assets/oak-trees.fbx', (fbx) => { assets.trees = fbx; });
+    fbxLoader.load('assets/grass.fbx', (fbx) => { assets.grass = fbx; });
+
+    // 5. SCATTERING LOGIC
+    loadingManager.onLoad = () => {
+        document.getElementById('ui').innerText = "World Generated";
+        const mapSize = 1000;
+
+        for (let i = 0; i < 120; i++) {
+            const x = (Math.random() - 0.5) * mapSize * 2;
+            const z = (Math.random() - 0.5) * mapSize * 2;
+
+            // --- Place Huge Rocks ---
+            if (assets.rocks) {
+                // Select one of the 5 rocks by name[cite: 1]
+                const rockID = Math.floor(Math.random() * 5) + 1;
+                const rock = assets.rocks.getObjectByName(`smallrock${rockID}`).clone();
+                rock.position.set(x, 0, z);
+                
+                // Cinema 4D scale is 1.0; we make it HUGE here[cite: 1]
+                const scale = 12 + Math.random() * 15; 
+                rock.scale.set(scale, scale, scale);
+                rock.rotation.y = Math.random() * Math.PI;
+                rock.material = rockMat;
+                rock.castShadow = true;
+                rock.receiveShadow = true;
+                scene.add(rock);
+            }
+
+            // --- Place Trees ---
+            if (assets.trees && i % 2 === 0) {
+                const tree = assets.trees.clone();
+                tree.position.set(x + (Math.random() * 50), 0, z + (Math.random() * 50));
+                const ts = 4 + Math.random() * 4;
+                tree.scale.set(ts, ts, ts);
+                tree.traverse(c => { if(c.isMesh) c.castShadow = true; });
+                scene.add(tree);
+            }
+
+            // --- Place Grass Patches ---
+            if (assets.grass) {
+                for(let j=0; j<4; j++) {
+                    const grass = assets.grass.clone();
+                    grass.position.set(x + (Math.random() * 20), 0, z + (Math.random() * 20));
+                    grass.scale.set(1.5, 1.5, 1.5);
+                    scene.add(grass);
+                }
+            }
+        }
+    };
+
+    // 6. CONTROLS & RENDER LOOP
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+</script>
+</body>
+</html>
