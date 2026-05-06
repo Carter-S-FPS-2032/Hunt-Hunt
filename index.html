@@ -1,20 +1,19 @@
 <!DOCTYPE html>
-<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World: Massive Randomized Map</title>
+    <title>3D World: Massive Forest & Hills</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #020205; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #050508; font-family: sans-serif; }
         #ui { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; text-shadow: 1px 1px 2px black; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1>Massive Scatter System</h1>
-        <p>Status: <span id="status">Generating Huge Map...</span></p>
+        <h1>Massive Environment</h1>
+        <p>Status: <span id="status">Generating Terrain...</span></p>
     </div>
 
     <script type="importmap">
@@ -31,93 +30,97 @@
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+        // --- CONFIG ---
+        const MAP_SIZE = 1000; 
+        const RENDER_DIST = 600;
+        const GRASS_COUNT = 8000;
+        const ROCK_COUNT = 1500;
+        const TREE_COUNT = 400;
+
         // --- SCENE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050508);
-        scene.fog = new THREE.FogExp2(0x050508, 0.005); // Fog adds depth to a huge map
+        scene.background = new THREE.Color(0x0a0a12);
         
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
-        camera.position.set(50, 30, 100);
+        // Render Distance / Fog Logic
+        scene.fog = new THREE.Fog(0x0a0a12, 100, RENDER_DIST);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(100, 50, 100);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
-        controls.maxDistance = 800;
+        controls.maxDistance = RENDER_DIST - 50;
 
-        // Lighting
         scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1.2));
 
-        // --- HUGE MAP SETTINGS ---
-        const MAP_SIZE = 500; 
-        const GRASS_COUNT = 5000; // Increased for a massive feel
-        const ROCK_COUNT = 800;   // Spread across the map
+        // --- HILLY FLOOR ---
+        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 64, 64);
+        const vertices = groundGeo.attributes.position.array;
+        
+        // Simple procedural hills
+        for (let i = 0; i < vertices.length; i += 3) {
+            const x = vertices[i];
+            const y = vertices[i + 1];
+            vertices[i + 2] = Math.sin(x * 0.02) * Math.cos(y * 0.02) * 15; // Elevation
+        }
+        groundGeo.computeVertexNormals();
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // Helper to get hill height at any X, Z coordinate
+        function getHeight(x, z) {
+            return Math.sin(x * 0.02) * Math.cos(z * 0.02) * 15;
+        }
+
+        // --- SCATTER SYSTEM ---
         const loader = new FBXLoader();
 
-        /**
-         * Scatters instances with massive randomization
-         */
-        function scatterAsset(name, count, isGrass) {
+        function scatter(name, count, isGrass, isTree = false) {
             loader.load(`./assets/${name}.fbx`, (fbx) => {
                 let sourceMesh;
                 fbx.traverse(child => { if (child.isMesh) sourceMesh = child; });
-
                 if (!sourceMesh) return;
 
                 const material = new THREE.MeshPhongMaterial({
-                    vertexColors: isGrass, // Grass "colors itself" via FBX data
-                    color: isGrass ? 0xffffff : 0x333333, // Rocks are dark grey
-                    shininess: isGrass ? 5 : 2
+                    vertexColors: isGrass, // Grass colors itself
+                    color: isGrass ? 0xffffff : (isTree ? 0x2d4c1e : 0x333333)
                 });
 
                 const instancedMesh = new THREE.InstancedMesh(sourceMesh.geometry, material, count);
                 const matrix = new THREE.Matrix4();
-                const position = new THREE.Vector3();
-                const rotation = new THREE.Euler();
-                const scale = new THREE.Vector3();
-                const quaternion = new THREE.Quaternion();
+                const pos = new THREE.Vector3();
+                const rot = new THREE.Euler();
+                const scl = new THREE.Vector3();
 
                 for (let i = 0; i < count; i++) {
-                    // RANDOM POSITION across the huge map
-                    position.set(
-                        (Math.random() - 0.5) * MAP_SIZE,
-                        0, 
-                        (Math.random() - 0.5) * MAP_SIZE
-                    );
+                    pos.x = (Math.random() - 0.5) * MAP_SIZE;
+                    pos.z = (Math.random() - 0.5) * MAP_SIZE;
+                    pos.y = getHeight(pos.x, pos.z); // Snaps to hills
 
-                    // RANDOM ROTATION (Full 360 on Y)
-                    rotation.set(0, Math.random() * Math.PI * 2, 0);
-                    quaternion.setFromEuler(rotation);
-
-                    // RANDOMIZED SCALE
-                    if (isGrass) {
-                        const s = 0.3 + Math.random() * 0.7; // Grass size variation
-                        scale.set(s, s, s);
-                    } else {
-                        const s = 0.05 + Math.random() * 0.15; // ROCKS ARE TINY/RANDOM
-                        scale.set(s, s, s);
-                    }
-
-                    matrix.compose(position, quaternion, scale);
+                    rot.y = Math.random() * Math.PI * 2;
+                    
+                    let s = 1.0;
+                    if (isGrass) s = 0.4 + Math.random() * 0.6;
+                    else if (isTree) s = 2.0 + Math.random() * 3.0; // Big trees
+                    else s = 0.05 + Math.random() * 0.15; // Tiny rocks
+                    
+                    scl.set(s, s, s);
+                    matrix.compose(pos, new THREE.Quaternion().setFromEuler(rot), scl);
                     instancedMesh.setMatrixAt(i, matrix);
                 }
-
                 scene.add(instancedMesh);
-                document.getElementById('status').innerText = `Generated ${GRASS_COUNT + ROCK_COUNT} objects.`;
             });
         }
 
-        // Load and randomize
-        scatterAsset("Grass", GRASS_COUNT, true);
-        scatterAsset("smallrocks", ROCK_COUNT, false);
-
-        // --- GROUND ---
-        const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
-        const groundMat = new THREE.MeshPhongMaterial({ color: 0x080808 });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
+        // Initialize assets
+        scatter("Grass", GRASS_COUNT, true);
+        scatter("smallrocks", ROCK_COUNT, false);
+        scatter("Tree", TREE_COUNT, false, true); // Assuming Tree.fbx exists
 
         function animate() {
             requestAnimationFrame(animate);
@@ -132,6 +135,7 @@
         });
 
         animate();
+        document.getElementById('status').innerText = "Vast World Loaded";
     </script>
 </body>
 </html>
