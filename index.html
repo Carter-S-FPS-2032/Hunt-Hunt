@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D World: Giant Pine Forest</title>
+    <title>3D World: Giant Overlapping Forest</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #a3b1c6; font-family: sans-serif; touch-action: none; }
         #controls { position: absolute; bottom: 30px; left: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
@@ -42,20 +42,18 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- SCENE SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xa3b1c6); 
         scene.fog = new THREE.Fog(0xa3b1c6, 100, 1500);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 3000);
-        camera.position.set(0, 15, 0); // Eye level
+        camera.position.set(0, 15, 0); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTING ---
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
         scene.add(hemiLight);
 
@@ -63,15 +61,15 @@
         dirLight.position.set(50, 100, 50);
         scene.add(dirLight);
 
-        // --- GROUND (#89683C) ---
+        // --- FOREST FLOOR GROUND ---
         const groundGeo = new THREE.PlaneGeometry(4000, 4000);
-        const groundMat = new THREE.MeshPhongMaterial({ color: 0x89683C });
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x2b1d0e }); // Dark forest floor
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // --- GIANT LAYERED TREE GENERATOR ---
-        function createGiantPine() {
+        // --- OVERLAPPING TREE GENERATOR ---
+        function createOverlappingPine() {
             const treeGroup = new THREE.Group();
             
             const leafMat = new THREE.MeshPhongMaterial({ 
@@ -85,18 +83,18 @@
                 flatShading: true 
             });
 
-            // Giant Trunk
-            const trunkGeo = new THREE.CylinderGeometry(4, 5, 25, 12);
+            // TRUNK GOING THROUGH: Height is increased to reach through the top layer
+            const trunkGeo = new THREE.CylinderGeometry(3, 4.5, 140, 12);
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.y = 12.5;
+            trunk.position.y = 70; // Centered to ground
             treeGroup.add(trunk);
 
-            // Giant Leaf Layers (Matching IMG_0019.jpeg proportions but scaled up)
+            // OVERLAPPING LAYERS: Reduced spacing so they "go in each other"
             const layers = [
-                { rad: 35, height: 45, y: 50 },    // Bottom
-                { rad: 28, height: 40, y: 85 },    // Mid-low
-                { rad: 20, height: 35, y: 115 },   // Mid-high
-                { rad: 12, height: 30, y: 140 }    // Top
+                { rad: 35, height: 45, y: 40 },    // Bottom
+                { rad: 28, height: 40, y: 65 },    // Mid-low (Overlaps 20 units)
+                { rad: 20, height: 35, y: 85 },    // Mid-high (Overlaps 15 units)
+                { rad: 12, height: 30, y: 105 }    // Top (Overlaps 10 units)
             ];
 
             layers.forEach(layer => {
@@ -109,22 +107,20 @@
             return treeGroup;
         }
 
-        // Scatter Giant Trees
-        const treeTemplate = createGiantPine();
-        const TREE_COUNT = 150; // Fewer trees because they are massive
+        const treeTemplate = createOverlappingPine();
+        const TREE_COUNT = 150; 
         for (let i = 0; i < TREE_COUNT; i++) {
             const tree = treeTemplate.clone();
             const x = (Math.random() - 0.5) * 3000;
             const z = (Math.random() - 0.5) * 3000;
             tree.position.set(x, 0, z);
-            // Additional random scale for variety
             const s = 0.8 + Math.random() * 0.4;
             tree.scale.set(s, s, s);
             tree.rotation.y = Math.random() * Math.PI;
             scene.add(tree);
         }
 
-        // --- CONTROLS ---
+        // --- MOVEMENT CONTROLS ---
         let lon = 0, lat = 0, startX = 0, startY = 0, startLon = 0, startLat = 0;
         document.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('btn')) return;
@@ -148,7 +144,6 @@
         };
         ['w','a','s','d'].forEach(k => setup(`btn-${k}`, k));
 
-        // --- ANIMATION LOOP ---
         let bob = 0;
         function animate() {
             requestAnimationFrame(animate);
@@ -162,14 +157,12 @@
             const right = new THREE.Vector3().setFromSphericalCoords(1, Math.PI/2, theta + Math.PI/2);
             const isMoving = keys.w || keys.s || keys.a || keys.d;
 
-            // SLOWER WALK SPEED (Reduced from 3 to 1.2)
-            const speed = 1.2;
+            const speed = 1.2; // Slow Walk Speed
             if (keys.w) camera.position.addScaledVector(forward, speed);
             if (keys.s) camera.position.addScaledVector(forward, -speed);
             if (keys.a) camera.position.addScaledVector(right, -speed);
             if (keys.d) camera.position.addScaledVector(right, speed);
 
-            // Subtle bobbing for the slower pace
             if (isMoving) bob += 0.1;
             camera.position.y = 15 + (isMoving ? Math.sin(bob) * 0.3 : 0);
 
