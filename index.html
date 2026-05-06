@@ -3,206 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Forest Hunter - Heavy Timber</title>
+    <title>Forest Hunter: Wildlife & Packs</title>
     <style>
-        :root { --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); }
-        body { margin: 0; overflow: hidden; background: #05070a; font-family: sans-serif; touch-action: none; }
-        #hud { position: absolute; bottom: 40px; left: 30px; display: grid; grid-template-areas: ". up ." "left down right"; gap: 15px; z-index: 10; pointer-events: none; }
-        .control-node { pointer-events: auto; width: 65px; height: 65px; background: var(--glass); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4); font-weight: 800; user-select: none; -webkit-user-select: none; }
-        .control-node:active { background: rgba(255, 255, 255, 0.2); color: #fff; }
-        #w { grid-area: up; } #a { grid-area: left; } #s { grid-area: down; } #d { grid-area: right; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 16px; background: rgba(255,255,255,0.4); pointer-events: none; }
-        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 16px; height: 2px; background: rgba(255,255,255,0.4); }
+        :root { --gold: #ffcc00; --ui-bg: rgba(10, 15, 20, 0.9); }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action: none; color: #eee; }
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; pointer-events: none; z-index: 100; border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; }
+        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
+        #stats-panel { position: absolute; top: 20px; left: 20px; background: var(--ui-bg); padding: 15px; border-radius: 10px; border-left: 5px solid var(--gold); }
+        #minimap-wrap { position: absolute; top: 20px; right: 20px; width: 160px; height: 160px; background: var(--ui-bg); border: 2px solid #444; border-radius: 50%; overflow: hidden; }
+        #map-player { position: absolute; width: 8px; height: 8px; background: #00ff44; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; }
+        #map-shop { position: absolute; width: 12px; height: 12px; background: var(--gold); transform: rotate(45deg); }
+        #backpack-gui { position: absolute; bottom: 120px; right: 20px; width: 220px; background: var(--ui-bg); border: 1px solid #555; padding: 15px; border-radius: 8px; display: none; }
+        #mobile-hud { position: absolute; bottom: 30px; left: 30px; display: grid; grid-template-areas: ". u ." "l d r"; gap: 12px; }
+        .m-btn { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
-    <div id="hud">
-        <div class="control-node" id="w">W</div>
-        <div class="control-node" id="a">A</div>
-        <div class="control-node" id="s">S</div>
-        <div class="control-node" id="d">D</div>
+    <div id="stats-panel">
+        <div style="color: var(--gold)">CREDITS: $<span id="val-money">0</span></div>
+        <div>BACKPACK: <span id="val-weight">0</span> / 50kg</div>
+    </div>
+    <div id="minimap-wrap"><div id="map-shop"></div><div id="map-player"></div></div>
+    <div id="backpack-gui"><h3 style="margin: 0; font-size: 14px;">INVENTORY (B)</h3><hr><ul id="item-list" style="font-size: 12px; padding-left: 15px;"></ul></div>
+    <div id="mobile-hud">
+        <div class="m-btn" style="grid-area: u" id="btn-w">W</div>
+        <div class="m-btn" style="grid-area: l" id="btn-a">A</div>
+        <div class="m-btn" style="grid-area: d" id="btn-s">S</div>
+        <div class="m-btn" style="grid-area: r" id="btn-d">D</div>
     </div>
 
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-    </script>
-
+    <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }</script>
     <script type="module">
         import * as THREE from 'three';
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x07090b);
-        scene.fog = new THREE.FogExp2(0x07090b, 0.003);
+        scene.background = new THREE.Color(0x020406);
+        scene.fog = new THREE.FogExp2(0x020406, 0.0015);
 
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 15000);
-        camera.position.set(0, 22, 0);
-
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 15000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        const sun = new THREE.DirectionalLight(0x445566, 2.5);
-        sun.position.set(50, 100, 50);
-        scene.add(sun, new THREE.AmbientLight(0xffffff, 0.2));
+        const light = new THREE.DirectionalLight(0x445566, 1.5);
+        light.position.set(10, 20, 10);
+        scene.add(light, new THREE.AmbientLight(0xffffff, 0.2));
 
-        // --- GROUND ---
-        const canvas = document.createElement('canvas');
-        canvas.width = 256; canvas.height = 256;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#0d100a';
-        ctx.fillRect(0, 0, 256, 256);
-        for(let i=0; i<3000; i++) {
-            ctx.fillStyle = `rgba(35, 45, 15, ${Math.random() * 0.6})`;
-            ctx.fillRect(Math.random()*256, Math.random()*256, 2, 2);
-        }
-        const groundTex = new THREE.CanvasTexture(canvas);
-        groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-        groundTex.repeat.set(1000, 1000);
+        // --- GAME STATE ---
+        const SHOP_POS = { x: 500, z: 500 };
+        let money = 0, currentWeight = 0;
+        const animals = [];
 
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(30000, 30000),
-            new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 })
-        );
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-
-        // --- HEAVY TRUNK / HIGH LEAF TREES ---
-        const treeCount = 18000;
-        const radius = 9000;
-        const treePositions = [];
-        const grid = new Map();
-        const gridSize = 140;
-
-        // Increased trunk thickness (radius from 2 to 4.5)
-        const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(3.5, 5.5, 120, 6), new THREE.MeshStandardMaterial({ color: 0x16120e }), treeCount);
-        const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(45, 150, 5), new THREE.MeshStandardMaterial({ color: 0x091409, flatShading: true }), treeCount);
-
-        const dummy = new THREE.Object3D();
-        const leafDummy = new THREE.Object3D();
-
-        for (let i = 0; i < treeCount; i++) {
-            const r = Math.sqrt(Math.random()) * radius;
-            const theta = Math.random() * Math.PI * 2;
-            const x = r * Math.cos(theta); const z = r * Math.sin(theta);
-            const s = 0.8 + Math.random() * 1.4;
-            
-            // Trunk
-            dummy.position.set(x, 40 * s, z); // Center of 120 height
-            dummy.scale.set(s, s, s); dummy.rotation.y = Math.random(); dummy.updateMatrix();
-            trunkMesh.setMatrixAt(i, dummy.matrix);
-
-            // Leaf - Positioned HIGH on the trunk
-            leafDummy.position.set(x, 110 * s, z); 
-            leafDummy.scale.set(s, s, s); leafDummy.rotation.y = dummy.rotation.y; leafDummy.updateMatrix();
-            leafMesh.setMatrixAt(i, leafDummy.matrix);
-            
-            treePositions.push({ x, z, r: 6.5 * s }); // Collision matches thick trunks
-            const gx = Math.floor(x/gridSize), gz = Math.floor(z/gridSize), key = `${gx},${gz}`;
-            if(!grid.has(key)) grid.set(key, []); grid.get(key).push(i);
-        }
-        scene.add(trunkMesh, leafMesh);
-
-        // --- THE RIFLE (FIXED SCOPE) ---
-        const rifle = new THREE.Group();
-        const steel = new THREE.MeshStandardMaterial({ color: 0x111113, metalness: 0.9, roughness: 0.2 });
-        const wood = new THREE.MeshStandardMaterial({ color: 0x221810, roughness: 0.9 });
-
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 11), wood);
-        body.position.set(0, -0.6, 0); rifle.add(body);
-
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 26, 12), steel);
-        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.4, -12); rifle.add(barrel);
-
-        // Scope Group
-        const scope = new THREE.Group();
-        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 16), steel);
-        tube.rotation.x = Math.PI/2;
-        
-        const eyePiece = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 1.5, 16), steel);
-        eyePiece.rotation.x = Math.PI/2; eyePiece.position.z = 4;
-        
-        // Physical Clamps
-        const mountA = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, 0.4), steel);
-        mountA.position.set(0, -0.6, 2);
-        const mountB = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, 0.4), steel);
-        mountB.position.set(0, -0.6, -2);
-
-        // Lens recessed INSIDE the eyepiece
-        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.48, 16), new THREE.MeshStandardMaterial({ color: 0x000510, emissive: 0x002244, metalness: 1 }));
-        lens.position.z = 4.76;
-
-        scope.add(tube, eyePiece, mountA, mountB, lens);
-        scope.position.set(0, 1.5, -4);
-        rifle.add(scope);
-
-        rifle.position.set(1.8, -1.9, -2.5);
-        camera.add(rifle); scene.add(camera);
-
-        // --- INTERACTION ---
-        let yaw = 0, pitch = 0, stride = 0, speed = 0;
-        const keys = { w: false, a: false, s: false, d: false };
-        window.onkeydown = (e) => { const k = e.key.toLowerCase(); if(keys.hasOwnProperty(k)) keys[k]=true; };
-        window.onkeyup = (e) => { const k = e.key.toLowerCase(); if(keys.hasOwnProperty(k)) keys[k]=false; };
-
-        let lx = 0, ly = 0;
-        document.onpointermove = (e) => {
-            if(e.buttons > 0 || e.pointerType === 'touch') {
-                yaw -= (e.movementX || e.clientX - lx) * 0.0022;
-                pitch = Math.max(-1.4, Math.min(1.4, pitch - (e.movementY || e.clientY - ly) * 0.0022));
+        // --- ASSETS: SHOP (Based on IMG_0022.jpeg) ---
+        function createShop() {
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(40, 25, 60), new THREE.MeshStandardMaterial({color: 0x3d2b1f}));
+            body.position.y = 15;
+            const roof = new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 65, 3, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({color: 0x221a15}));
+            roof.rotation.set(0, Math.PI/2, Math.PI/2); roof.position.y = 35;
+            const wheels = new THREE.CylinderGeometry(10, 10, 4, 8); wheels.rotateZ(Math.PI/2);
+            for(let i=0; i<4; i++) {
+                const w = new THREE.Mesh(wheels, new THREE.MeshStandardMaterial({color: 0x111}));
+                w.position.set(i<2?-22:22, 10, i%2===0?-20:20); g.add(w);
             }
-            lx = e.clientX; ly = e.clientY;
+            const glow = new THREE.PointLight(0xff6600, 1000, 100); glow.position.set(25, 20, 0);
+            g.add(body, roof, glow); return g;
+        }
+        const shop = createShop(); shop.position.set(SHOP_POS.x, 0, SHOP_POS.z); scene.add(shop);
+
+        // --- WILDLIFE LOGIC ---
+        const species = {
+            wolf: { color: 0x444444, weight: 8, scale: 2, isPack: true },
+            elk: { color: 0x7a5a3a, weight: 12, scale: 4, isPack: false },
+            moose: { color: 0x3d2b1f, weight: 20, scale: 5, isPack: false },
+            deer: { color: 0xa67c52, weight: 6, scale: 3, isPack: false },
+            fox: { color: 0xd35400, weight: 2, scale: 1.2, isPack: false }
         };
 
-        function checkHit(p) {
-            const gx = Math.floor(p.x/gridSize), gz = Math.floor(p.z/gridSize);
-            for(let x=gx-1; x<=gx+1; x++) {
-                for(let z=gz-1; z<=gz+1; z++) {
-                    const cell = grid.get(`${x},${z}`);
-                    if(cell) for(const i of cell) {
-                        const t = treePositions[i], dx = p.x-t.x, dz = p.z-t.z;
-                        if(dx*dx + dz*dz < (t.r+3)**2) return true;
-                    }
+        function spawnAnimal(type, x, z, packLeader = null) {
+            const data = species[type];
+            const geo = new THREE.BoxGeometry(data.scale, data.scale, data.scale * 1.5);
+            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: data.color}));
+            mesh.position.set(x, data.scale/2, z);
+            scene.add(mesh);
+            animals.push({ mesh, type, weight: data.weight, leader: packLeader, velocity: new THREE.Vector3(Math.random()-0.5, 0, Math.random()-0.5) });
+        }
+
+        // Spawn Packs & Individuals
+        for(let i=0; i<5; i++) { // 5 Wolf Packs
+            let lx = (Math.random()-0.5)*4000, lz = (Math.random()-0.5)*4000;
+            spawnAnimal('wolf', lx, lz);
+            let leader = animals[animals.length-1];
+            for(let j=0; j<3; j++) spawnAnimal('wolf', lx+Math.random()*20, lz+Math.random()*20, leader);
+        }
+        ['elk', 'moose', 'deer', 'fox'].forEach(t => {
+            for(let i=0; i<15; i++) spawnAnimal(t, (Math.random()-0.5)*4000, (Math.random()-0.5)*4000);
+        });
+
+        // --- PLAYER & RIFLE ---
+        const rifle = new THREE.Group();
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 25), new THREE.MeshStandardMaterial({color: 0x111}));
+        barrel.rotation.x = Math.PI/2; barrel.position.z = -12;
+        rifle.add(barrel); rifle.position.set(0, -1.5, -2);
+        camera.add(rifle); scene.add(camera); camera.position.set(0, 25, 0);
+
+        // --- CONTROLS ---
+        const keys = {};
+        window.onkeydown = (e) => { keys[e.key.toLowerCase()] = true; if(e.key==='b') document.getElementById('backpack-gui').style.display = 'block'; };
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+        let yaw = 0, pitch = 0;
+        document.addEventListener('pointermove', (e) => {
+            if(document.pointerLockElement) {
+                yaw -= e.movementX * 0.002; pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.002));
+            }
+        });
+        renderer.domElement.onclick = () => {
+            renderer.domElement.requestPointerLock();
+            // Simple Raycast for Hunting
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = ray.intersectObjects(animals.map(a => a.mesh));
+            if(hits.length > 0) {
+                const hitMesh = hits[0].object;
+                const index = animals.findIndex(a => a.mesh === hitMesh);
+                if(index > -1 && currentWeight + animals[index].weight <= 50) {
+                    currentWeight += animals[index].weight;
+                    scene.remove(hitMesh);
+                    const li = document.createElement('li'); li.innerText = `${animals[index].type} (${animals[index].weight}kg)`;
+                    document.getElementById('item-list').appendChild(li);
+                    animals.splice(index, 1);
+                    document.getElementById('val-weight').innerText = currentWeight;
                 }
             }
-            return false;
-        }
+        };
 
         function animate() {
             requestAnimationFrame(animate);
             const move = new THREE.Vector3();
-            if(keys.w) move.z -= 1; if(keys.s) move.z += 1;
-            if(keys.a) move.x -= 1; if(keys.d) move.x += 1;
-
-            if(move.lengthSq() > 0) {
-                speed = THREE.MathUtils.lerp(speed, 1.6, 0.05);
-                move.normalize().applyQuaternion(camera.quaternion);
-                move.y = 0;
-                const next = camera.position.clone().addScaledVector(move, speed);
-                if(!checkHit({x: next.x, z: camera.position.z})) camera.position.x = next.x;
-                if(!checkHit({x: camera.position.x, z: next.z})) camera.position.z = next.z;
-                stride += 0.085;
-                camera.position.y = 22 + Math.sin(stride) * 0.28;
-                rifle.position.y = -1.9 + Math.sin(stride*2) * 0.04;
-            } else {
-                speed = 0; camera.position.y = THREE.MathUtils.lerp(camera.position.y, 22, 0.1);
-            }
+            if(keys.w) move.z -= 1.5; if(keys.s) move.z += 1.5;
+            if(keys.a) move.x -= 1.5; if(keys.d) move.x += 1.5;
+            move.applyQuaternion(camera.quaternion); move.y = 0;
+            camera.position.add(move);
             camera.rotation.set(pitch, yaw, 0, 'YXZ');
+
+            // AI Movement
+            animals.forEach(a => {
+                if(a.leader) { // Follow Leader
+                    const toLeader = a.leader.mesh.position.clone().sub(a.mesh.position);
+                    if(toLeader.length() > 15) a.mesh.position.add(toLeader.normalize().multiplyScalar(0.4));
+                } else { // Wander
+                    a.mesh.position.add(a.velocity.clone().multiplyScalar(0.3));
+                    if(Math.random() > 0.99) a.velocity.set(Math.random()-0.5, 0, Math.random()-0.5);
+                }
+            });
+
+            // Minimap
+            const dx = SHOP_POS.x - camera.position.x, dz = SHOP_POS.z - camera.position.z;
+            document.getElementById('map-shop').style.left = (80 + dx/20)+'px';
+            document.getElementById('map-shop').style.top = (80 + dz/20)+'px';
+
+            // Sell Logic
+            if(camera.position.distanceTo(new THREE.Vector3(SHOP_POS.x, 0, SHOP_POS.z)) < 50 && currentWeight > 0) {
+                money += currentWeight * 10; currentWeight = 0;
+                document.getElementById('val-money').innerText = money;
+                document.getElementById('val-weight').innerText = "0";
+                document.getElementById('item-list').innerHTML = "";
+            }
+
             renderer.render(scene, camera);
         }
         animate();
-
-        window.onresize = () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        };
-        ['w', 'a', 's', 'd'].forEach(k => {
-            const el = document.getElementById(k);
-            el.onpointerdown = (e) => { e.preventDefault(); keys[k] = true; };
-            el.onpointerup = () => keys[k] = false;
-        });
     </script>
 </body>
 </html>
